@@ -3,6 +3,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <dirent.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #define da_push(da, data) \
     do { \
@@ -43,6 +47,16 @@ String trim_left(const String s)
     return str;
 }
 
+String trim_left_by_delim(const String s, char delim)
+{
+    String str = s;
+    for (size_t i = 0; i < s.len && s.data[i] == delim; i++) {
+        str.data++;
+        str.len--;
+    }
+    return str;
+}
+
 String next_word(String *s)
 {
     String str = { .data = s->data };
@@ -53,6 +67,36 @@ String next_word(String *s)
     s->len -= str.len;
 
     return str;
+}
+
+String chop_by_delim(String *s, char delim)
+{
+    String str = { .data = s->data };
+    for (size_t i = 0; i < s->len && s->data[i] != delim; i++) {
+        str.len++;
+    }
+    s->data += str.len;
+    s->len -= str.len;
+    if (s->len >= 1) {
+        s->data[0] = '\0';
+        s->data += 1;
+        s->len -= 1;
+    }
+
+    return str;
+}
+
+StrList split_by_delim(const char *s, char delim)
+{
+    StrList words = {0};
+    String str = { .data = (char*)s, .len = strlen(s) };
+    str = trim_left_by_delim(str, delim);
+
+    while (str.len > 0) {
+        da_push(words, chop_by_delim(&str, delim));
+    }
+
+    return words;
 }
 
 StrList extract_words(const char *s)
@@ -69,22 +113,108 @@ StrList extract_words(const char *s)
     return words;
 }
 
+typedef enum {
+    CMD_EXIT,
+    CMD_ECHO,
+    CMD_TYPE,
+    CMD_COUNT,
+} Commands;
+
+static String commands[CMD_COUNT] = {
+    { "exit", 4 },
+    { "echo", 4 },
+    { "type", 4 },
+};
+
+const char* get_file_name(const char *path)
+{
+    int64_t len = strlen(path);
+    for (int64_t i = len - 1; i >= 0; i--) {
+        if (path[i] == '/' && i + 1 < len) {
+            return &path[i+1];
+        }
+    }
+    return NULL;
+}
+
+const char* search_path(String cmd)
+{
+    char* path = getenv("PATH");
+    printf("Path:\n%s\n", path);
+    if (path == NULL) return NULL;
+    StrList dirs = split_by_delim(path, ':');
+    DIR *dir;
+    struct dirent *ent;
+    for (size_t i = 0; i < dirs.count; i++) {
+        dir = opendir(dirs.items[i].data);
+        if (dir == NULL)
+            continue;
+        printf("Dir: '%s'\n", dirs.items[i].data);
+        while ((ent = readdir(dir)) != NULL) {
+            struct stat sb;
+            struct stat path_stat;
+            stat(ent->d_name, &path_stat);
+            bool is_file = S_ISREG(path_stat.st_mode);
+            if (is_file && stat(ent->d_name, &sb) == 0 && sb.st_mode & S_IXUSR) { // File has executable permission
+                printf("Entry: '%s'\n", ent->d_name);
+                const char *name = get_file_name(ent->d_name);
+                if (name == NULL)
+                    continue;
+                printf("Entry Name: '%s'\n", name);
+                if (strlen(name) == cmd.len && memcmp(name, cmd.data, cmd.len) == 0) {
+                    return ent->d_name;
+                }
+            }
+        }
+        closedir (dir);
+    }
+
+    return NULL;
+}
+
+void command_echo(StrList words)
+{
+    for (size_t i = 1; i < words.count; i++) {
+        printf("%.*s", (int)words.items[i].len, words.items[i].data);
+        if (i < words.count - 1)
+            printf(" ");
+    }
+    printf("\n");
+    fflush(stdout);
+}
+
+void command_type(StrList words)
+{
+    if (words.count < 1) {
+        printf("No command was provided.");
+        fflush(stdout);
+        return;
+    }
+    int matched = -1;
+    const char *buf;
+    for (size_t i = 0; i < CMD_COUNT; i++) {
+        if (words.items[1].len == commands[i].len && memcmp(words.items[1].data, commands[i].data, commands[i].len) == 0) {
+            matched = i;
+        }
+    }
+    if (matched != -1) {
+        printf("%.*s is a shell builtin\n", (int)words.items[1].len, words.items[1].data);
+    }
+    else if ((buf = search_path(words.items[1])) != NULL) {
+
+        printf("%.*s is %s\n", (int)words.items[1].len, words.items[1].data, buf);
+    }
+    else {
+        printf("%.*s: not found\n", (int)words.items[1].len, words.items[1].data);
+    }
+    fflush(stdout);
+}
+
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
     enum { BUFFER_SZ = 2048 };
     char BUFFER[BUFFER_SZ];
-    enum commands {
-        CMD_EXIT,
-        CMD_ECHO,
-        CMD_TYPE,
-        CMD_COUNT,
-    };
-    String commands[CMD_COUNT] = {
-        { "exit", 4 },
-        { "echo", 4 },
-        { "type", 4 },
-    };
 
     #define MATCH_CMDS(item)                                                                                                    \
     do {                                                                                                                        \
@@ -107,27 +237,10 @@ int main(int argc, char *argv[])
         case CMD_EXIT:
             exit(0);
         case CMD_ECHO:
-            for (size_t i = 1; i < words.count; i++) {
-                printf("%.*s", (int)words.items[i].len, words.items[i].data);
-                if (i < words.count - 1)
-                    printf(" ");
-            }
-            printf("\n");
-            fflush(stdout);
+                command_echo(words);
             break;
         case CMD_TYPE:
-            if (words.count > 1) {
-                matched = -1;
-                MATCH_CMDS(words.items[1]);
-                if (matched == -1) {
-                    printf("%.*s: not found\n", (int)words.items[1].len, words.items[1].data);
-                    fflush(stdout);
-                }
-                else {
-                    printf("%.*s is a shell builtin\n", (int)words.items[1].len, words.items[1].data);
-                    fflush(stdout);
-                }
-            }
+                command_type(words);
             break;
         default:
             printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
