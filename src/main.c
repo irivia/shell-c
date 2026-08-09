@@ -106,6 +106,8 @@ int main(int argc, char *argv[])
             case CMD_ECHO:
                 for (size_t i = 1; i < words.count; i++) {
                     printf("%.*s", (int)words.items[i].len, words.items[i].data);
+                    if (i < words.count - 1)
+                        printf(" ");
                 }
                 printf("\n");
                 fflush(stdout);
