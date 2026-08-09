@@ -77,44 +77,62 @@ int main(int argc, char *argv[])
     enum commands {
         CMD_EXIT,
         CMD_ECHO,
+        CMD_TYPE,
         CMD_COUNT,
     };
     String commands[CMD_COUNT] = {
         { "exit", 4 },
         { "echo", 4 },
+        { "type", 4 },
     };
+
+    #define MATCH_CMDS(item)                                                                                                    \
+    do {                                                                                                                        \
+        for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
+            if (item.len == commands[i].len && memcmp(item.data, commands[i].data, commands[i].len) == 0) {                     \
+                matched = i;                                                                                                    \
+            }                                                                                                                   \
+        }                                                                                                                       \
+    } while (0)
 
     while (true) {
         printf("$ ");
-        if (fgets(BUFFER, BUFFER_SZ, stdin) != NULL) {
-            StrList words = extract_words(BUFFER);
-            if (words.count == 0) continue;
-            int matched = -1;
-            for (size_t i = 0; i < CMD_COUNT; i++) {
-                if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
-                    matched = i;
+        if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
+            continue;
+        StrList words = extract_words(BUFFER);
+        if (words.count == 0) continue;
+        int matched = -1;
+        MATCH_CMDS(words.items[0]);
+        switch (matched) {
+        case CMD_EXIT:
+            exit(0);
+        case CMD_ECHO:
+            for (size_t i = 1; i < words.count; i++) {
+                printf("%.*s", (int)words.items[i].len, words.items[i].data);
+                if (i < words.count - 1)
+                    printf(" ");
+            }
+            printf("\n");
+            fflush(stdout);
+            break;
+        case CMD_TYPE:
+            if (words.count > 1) {
+                matched = -1;
+                MATCH_CMDS(words.items[1]);
+                if (matched == -1) {
+                    printf("%.*s: not found\n", (int)words.items[1].len, words.items[1].data);
+                    fflush(stdout);
+                }
+                else {
+                    printf("%.*s is a shell builtin\n", (int)words.items[1].len, words.items[1].data);
+                    fflush(stdout);
                 }
             }
-            if (matched == -1) {
-                printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
-                fflush(stdout);
-                continue;
-            }
-            switch (matched) {
-            case CMD_EXIT:
-                exit(0);
-            case CMD_ECHO:
-                for (size_t i = 1; i < words.count; i++) {
-                    printf("%.*s", (int)words.items[i].len, words.items[i].data);
-                    if (i < words.count - 1)
-                        printf(" ");
-                }
-                printf("\n");
-                fflush(stdout);
-                break;
-            default:
-                break; // UNREACHABLE
-            }
+            break;
+        default:
+            printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
+            fflush(stdout);
+            break;
         }
     }
 
