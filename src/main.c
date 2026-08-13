@@ -140,29 +140,30 @@ const char* get_file_name(const char *path)
 const char* search_path(String cmd)
 {
     char* path = getenv("PATH");
-    printf("Path:\n%s\n", path);
     if (path == NULL) return NULL;
     StrList dirs = split_by_delim(path, ':');
     DIR *dir;
     struct dirent *ent;
     for (size_t i = 0; i < dirs.count; i++) {
-        dir = opendir(dirs.items[i].data);
-        if (dir == NULL)
+        if ((dir = opendir(dirs.items[i].data)) == NULL)
             continue;
-        printf("Dir: '%s'\n", dirs.items[i].data);
         while ((ent = readdir(dir)) != NULL) {
+            if (strlen(ent->d_name) != cmd.len)
+                continue;
+            char temp[512] = {0};
+            size_t wrote = snprintf(temp, 512, "%s/%s", dirs.items[i].data, ent->d_name);
+            if (wrote == 0)
+                continue;
+            char *real_path = (char*)malloc(wrote + 1);
+            memcpy(real_path, temp, wrote);
+            real_path[wrote] = '\0';
             struct stat sb;
             struct stat path_stat;
-            stat(ent->d_name, &path_stat);
+            stat(real_path, &path_stat);
             bool is_file = S_ISREG(path_stat.st_mode);
-            if (is_file && stat(ent->d_name, &sb) == 0 && sb.st_mode & S_IXUSR) { // File has executable permission
-                printf("Entry: '%s'\n", ent->d_name);
-                const char *name = get_file_name(ent->d_name);
-                if (name == NULL)
-                    continue;
-                printf("Entry Name: '%s'\n", name);
-                if (strlen(name) == cmd.len && memcmp(name, cmd.data, cmd.len) == 0) {
-                    return ent->d_name;
+            if (is_file && stat(real_path, &sb) == 0 && sb.st_mode & S_IXUSR) { // File has executable permission
+                if (memcmp(ent->d_name, cmd.data, cmd.len) == 0) {
+                    return real_path;
                 }
             }
         }
