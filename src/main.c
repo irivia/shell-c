@@ -16,6 +16,13 @@
         (da).count += 1;                                                   \
     } while (0)
 
+#define da_free(da)        \
+    do {                   \
+        free((da).items);  \
+        (da).count = 0;    \
+        (da).capacity = 0; \
+    } while (0)
+
 typedef struct {
     char *data;
     size_t len;
@@ -163,11 +170,12 @@ const char* search_path(String cmd)
             bool is_file = S_ISREG(path_stat.st_mode);
             if (is_file && stat(real_path, &sb) == 0 && sb.st_mode & S_IXUSR) { // File has executable permission
                 if (memcmp(ent->d_name, cmd.data, cmd.len) == 0) {
+                    closedir(dir);
                     return real_path;
                 }
             }
         }
-        closedir (dir);
+        closedir(dir);
     }
 
     return NULL;
