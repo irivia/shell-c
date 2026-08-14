@@ -150,6 +150,16 @@ const char* get_file_name(const char *path)
     return NULL;
 }
 
+bool is_file_executable(const char *file)
+{
+    struct stat path_stat;
+
+    return (
+        file != NULL && stat(file, &path_stat) == 0 &&
+        S_ISREG(path_stat.st_mode) && access(file, X_OK) == 0
+    );
+}
+
 const char* search_path(const StrList path_dirs, const String cmd)
 {
     if (cmd.len == 3 && strncmp("cat", cmd.data, 3) == 0)
@@ -158,8 +168,6 @@ const char* search_path(const StrList path_dirs, const String cmd)
         return NULL;
     DIR *dir;
     struct dirent *ent;
-    struct stat sb;
-    struct stat path_stat;
     for (size_t i = 0; i < path_dirs.count; i++) {
         if ((dir = opendir(path_dirs.items[i].data)) == NULL)
             continue;
@@ -175,8 +183,7 @@ const char* search_path(const StrList path_dirs, const String cmd)
                 free(real_path);
                 continue;
             }
-            stat(real_path, &path_stat);
-            if (S_ISREG(path_stat.st_mode) && access(real_path, X_OK) == 0) {
+            if (is_file_executable(real_path)) {
                 if (memcmp(ent->d_name, cmd.data, cmd.len) == 0) {
                     closedir(dir);
                     return real_path;
