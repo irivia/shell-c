@@ -24,6 +24,11 @@
         (da).capacity = 0; \
     } while (0)
 
+#define da_clear(da)    \
+    do {                \
+        (da).count = 0; \
+    } while (0)
+
 typedef struct {
     char *data;
     size_t len;
@@ -171,14 +176,17 @@ const char* search_path(String cmd)
             bool is_file = S_ISREG(path_stat.st_mode);
             if (is_file && stat(real_path, &sb) == 0 && sb.st_mode & S_IXUSR) { // File has executable permission
                 if (memcmp(ent->d_name, cmd.data, cmd.len) == 0) {
+                    da_free(dirs); // frees the dynamic array before returning
                     closedir(dir);
                     return real_path;
                 }
             }
+            free(real_path);
         }
         closedir(dir);
     }
 
+    da_free(dirs);
     return NULL;
 }
 
@@ -225,7 +233,6 @@ int main(int argc, char *argv[])
     setbuf(stdout, NULL);
     enum { BUFFER_SZ = 2048 };
     char BUFFER[BUFFER_SZ];
-
     #define MATCH_CMDS(item)                                                                                                    \
     do {                                                                                                                        \
         for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
@@ -257,6 +264,7 @@ int main(int argc, char *argv[])
             fflush(stdout);
             break;
         }
+        da_free(words);
     }
 
 
