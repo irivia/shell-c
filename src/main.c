@@ -8,8 +8,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#define da_push(da, data) \
-    do { \
+#define da_push(da, data)                                                  \
+    do {                                                                   \
         (da).capacity = (da).capacity > 0 ? (da).capacity * 2 : 32;        \
         (da).items = realloc(da.items, da.capacity * sizeof(*(da).items)); \
         (da).items[(da).count] = (data);                                   \
@@ -19,6 +19,7 @@
 #define da_free(da)        \
     do {                   \
         free((da).items);  \
+        (da).items = NULL; \
         (da).count = 0;    \
         (da).capacity = 0; \
     } while (0)
