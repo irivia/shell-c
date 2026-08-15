@@ -232,6 +232,7 @@ void execute_program(const char *path, StrList args)
     }
     else {
         wait(NULL);
+        free(arguments);
     }
 }
 
