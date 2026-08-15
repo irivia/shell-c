@@ -211,15 +211,6 @@ int main(int argc, char *argv[])
         path_dirs = split_by_delim(path, ':');
     }
 
-    #define MATCH_CMDS(item)                                                                                                    \
-    do {                                                                                                                        \
-        for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
-            if (item.len == commands[i].len && memcmp(item.data, commands[i].data, commands[i].len) == 0) {                     \
-                matched = i;                                                                                                    \
-            }                                                                                                                   \
-        }                                                                                                                       \
-    } while (0)
-
     while (true) {
         printf("$ ");
         if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
@@ -231,15 +222,19 @@ int main(int argc, char *argv[])
         StrList words = split_by_delim(BUFFER, ' ');
         if (words.count == 0) continue;
         int matched = -1;
-        MATCH_CMDS(words.items[0]);
+        for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
+            if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) { \
+                matched = i;                                                                                                    \
+            }                                                                                                                   \
+        }                                                                                                                       \
         switch (matched) {
         case CMD_EXIT:
             exit(0);
         case CMD_ECHO:
-                command_echo(words);
+            command_echo(words);
             break;
         case CMD_TYPE:
-                command_type(path_dirs, words);
+            command_type(path_dirs, words);
             break;
         default:
             printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
