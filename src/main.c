@@ -72,6 +72,8 @@ String trim_left_by_delim(const String s, char delim)
 
 StrList split_by_delim(char *s, char delim)
 {
+    if (s == NULL) return (StrList){0};
+
     StrList words = {0};
     size_t cur_len = 0;
     char *cur = s;
