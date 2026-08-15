@@ -116,6 +116,7 @@ typedef enum {
     CMD_ECHO,
     CMD_TYPE,
     CMD_PWD,
+    CMD_CD,
     CMD_COUNT,
 } Commands;
 
@@ -124,6 +125,7 @@ static String commands[CMD_COUNT] = {
     { "echo", 4 },
     { "type", 4 },
     { "pwd", 3 },
+    { "cd", 2 },
 };
 
 const char* get_file_name(const char *path)
@@ -230,6 +232,16 @@ void command_pwd()
     }
 }
 
+void command_cd(String path)
+{
+    if (path.len == 0)
+        return;
+    if (chdir(path.data) != 0) {
+        printf("cd: %s: No such file or directory\n", path.data);
+        fflush(stdout);
+    }
+}
+
 void execute_program(const char *path, StrList args)
 {
     if (path == NULL || args.count == 0)
@@ -283,6 +295,12 @@ int main(int argc, char *argv[])
             break;
         case CMD_PWD:
             command_pwd();
+            break;
+        case CMD_CD:
+            if (words.count > 1)
+                command_cd(words.items[1]);
+            else
+                command_cd((String){0});
             break;
         default:
             if ((program = search_path(path_dirs, words.items[0])) != NULL) {
