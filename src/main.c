@@ -235,8 +235,7 @@ void command_pwd()
 void command_cd(String path)
 {
     if (path.len == 0 || (path.len == 1 && path.data[0] == '~')) {
-        struct passwd *pw = getpwuid(getuid());
-        const char *homedir = pw->pw_dir;
+        char *homedir = getenv("HOME");
         chdir(homedir);
     }
     else if (chdir(path.data) != 0) {
