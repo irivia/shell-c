@@ -236,6 +236,10 @@ void command_cd(String path)
 {
     if (path.len == 0 || (path.len == 1 && path.data[0] == '~')) {
         char *homedir = getenv("HOME");
+        if (homedir == NULL) {
+            struct passwd *pw = getpwuid(getuid());
+            homedir = pw->pw_dir;
+        }
         chdir(homedir);
     }
     else if (chdir(path.data) != 0) {
