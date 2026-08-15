@@ -176,8 +176,8 @@ void command_echo(StrList words)
 
 void command_type(StrList path_dirs, StrList words)
 {
-    if (words.count < 1) {
-        printf("No command was provided.");
+    if (words.count < 2) {
+        printf("No command was provided.\n");
         fflush(stdout);
         return;
     }
@@ -225,7 +225,7 @@ int main(int argc, char *argv[])
         if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
             continue;
         size_t buffer_len = strlen(BUFFER);
-        if (BUFFER[buffer_len - 1] == '\n') {
+        if (is_space(BUFFER[buffer_len - 1])) {
             BUFFER[buffer_len - 1] = '\0';
         }
         StrList words = split_by_delim(BUFFER, ' ');
