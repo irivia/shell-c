@@ -285,7 +285,8 @@ int main(int argc, char *argv[])
         if (words.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
-            if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
+            if (words.items[0].len == commands[i].len &&
+                memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
                 matched = i;
             }
         }
