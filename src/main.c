@@ -6,7 +6,9 @@
 #include <dirent.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <unistd.h>
+
 
 #define da_push(da, data)                                                  \
     do {                                                                   \
@@ -216,6 +218,22 @@ void command_type(StrList path_dirs, StrList words)
     fflush(stdout);
 }
 
+void execute_program(const char *path, StrList args)
+{
+    if (path == NULL || args.count == 0)
+        return;
+    char* *arguments = (char**)malloc((args.count + 1) * sizeof(*arguments));
+    for (size_t i = 0; i < args.count; i++)
+        arguments[i] = args.items[i].data;
+    arguments[args.count] = NULL;
+    int pid = fork();
+    if (pid == 0) {
+        execv(path, arguments);
+    }
+    else {
+        wait(NULL);
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -252,9 +270,12 @@ int main(int argc, char *argv[])
             break;
         default:
             if ((program = search_path(path_dirs, words.items[0])) != NULL) {
+                execute_program(program, words);
             }
-            printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
-            fflush(stdout);
+            else {
+                printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
+                fflush(stdout);
+            }
             break;
         }
         da_free(words);
