@@ -1,3 +1,4 @@
+#include <linux/limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -114,6 +115,7 @@ typedef enum {
     CMD_EXIT,
     CMD_ECHO,
     CMD_TYPE,
+    CMD_PWD,
     CMD_COUNT,
 } Commands;
 
@@ -121,6 +123,7 @@ static String commands[CMD_COUNT] = {
     { "exit", 4 },
     { "echo", 4 },
     { "type", 4 },
+    { "pwd", 3 },
 };
 
 const char* get_file_name(const char *path)
@@ -218,6 +221,15 @@ void command_type(StrList path_dirs, StrList words)
     fflush(stdout);
 }
 
+void command_pwd()
+{
+    char cwd[PATH_MAX];
+    if (getcwd(cwd, sizeof(cwd)) != NULL) {
+        printf("%s\n", cwd);
+        fflush(stdout);
+    }
+}
+
 void execute_program(const char *path, StrList args)
 {
     if (path == NULL || args.count == 0)
@@ -268,6 +280,9 @@ int main(int argc, char *argv[])
             break;
         case CMD_TYPE:
             command_type(path_dirs, words);
+            break;
+        case CMD_PWD:
+            command_pwd();
             break;
         default:
             if ((program = search_path(path_dirs, words.items[0])) != NULL) {
