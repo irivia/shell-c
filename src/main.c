@@ -155,9 +155,9 @@ char* search_path(const StrList path_dirs, const String cmd)
         return NULL;
     DIR *dir;
     struct dirent *ent;
-    char temp_buf[4096];
+    char temp_buf[PATH_MAX];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        snprintf(temp_buf, 4096, "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
         if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
