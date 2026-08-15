@@ -284,11 +284,11 @@ int main(int argc, char *argv[])
         StrList words = extract_words(BUFFER);
         if (words.count == 0) continue;
         int matched = -1;
-        for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
-            if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) { \
-                matched = i;                                                                                                    \
-            }                                                                                                                   \
-        }                                                                                                                       \
+        for (size_t i = 0; i < CMD_COUNT; i++) {
+            if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
+                matched = i;
+            }
+        }
         char *program = NULL;
         switch (matched) {
         case CMD_EXIT:
