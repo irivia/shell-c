@@ -70,57 +70,31 @@ String trim_left_by_delim(const String s, char delim)
     return str;
 }
 
-String next_word(String *s)
-{
-    String str = { .data = s->data };
-    for (size_t i = 0; i < s->len && !is_space(s->data[i]); i++) {
-        str.len++;
-    }
-    s->data += str.len;
-    s->len -= str.len;
-
-    return str;
-}
-
-String chop_by_delim(String *s, char delim)
-{
-    String str = { .data = s->data };
-    for (size_t i = 0; i < s->len && s->data[i] != delim; i++) {
-        str.len++;
-    }
-    s->data += str.len;
-    s->len -= str.len;
-    if (s->len >= 1) {
-        s->data[0] = '\0';
-        s->data += 1;
-        s->len -= 1;
-    }
-
-    return str;
-}
-
-StrList split_by_delim(const char *s, char delim)
+StrList split_by_delim(char *s, char delim)
 {
     StrList words = {0};
-    String str = { .data = (char*)s, .len = strlen(s) };
-    str = trim_left_by_delim(str, delim);
+    size_t cur_len = 0;
+    char *cur = s;
 
-    while (str.len > 0) {
-        da_push(words, chop_by_delim(&str, delim));
+    while (*s != '\0') {
+        if (*s != delim && cur_len == 0) {
+            cur = s;
+            cur_len = 1;
+        }
+        else if (*s != delim) {
+            cur_len++;
+        }
+        else if (cur_len != 0) {
+            String word = { .data = cur, .len = cur_len };
+            da_push(words, word);
+            cur_len = 0;
+        }
+        s++;
     }
 
-    return words;
-}
-
-StrList extract_words(const char *s)
-{
-    StrList words = {0};
-    String str = { .data = (char*)s, .len = strlen(s) };
-    str = trim_left(str);
-
-    while (str.len > 0) {
-        da_push(words, next_word(&str));
-        str = trim_left(str);
+    if (cur_len != 0) {
+        String word = { .data = cur, .len = cur_len };
+        da_push(words, word);
     }
 
     return words;
@@ -162,14 +136,14 @@ bool is_file_executable(const char *file)
 
 const char* search_path(const StrList path_dirs, const String cmd)
 {
-    if (cmd.len == 3 && strncmp("cat", cmd.data, 3) == 0)
-        return "/usr/bin/cat";
     if (path_dirs.count == 0 || cmd.data == NULL || cmd.len == 0)
         return NULL;
     DIR *dir;
     struct dirent *ent;
+    char temp_buf[4096];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        if ((dir = opendir(path_dirs.items[i].data)) == NULL)
+        snprintf(temp_buf, 4096, "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
+        if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
             size_t ent_len = strlen(ent->d_name);
@@ -258,7 +232,11 @@ int main(int argc, char *argv[])
         printf("$ ");
         if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
             continue;
-        StrList words = extract_words(BUFFER);
+        size_t buffer_len = strlen(BUFFER);
+        if (BUFFER[buffer_len - 1] == '\n') {
+            BUFFER[buffer_len - 1] = '\0';
+        }
+        StrList words = split_by_delim(BUFFER, ' ');
         if (words.count == 0) continue;
         int matched = -1;
         MATCH_CMDS(words.items[0]);
