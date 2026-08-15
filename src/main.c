@@ -9,7 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
-
+#include <pwd.h>
 
 #define da_push(da, data)                                                  \
     do {                                                                   \
@@ -234,9 +234,12 @@ void command_pwd()
 
 void command_cd(String path)
 {
-    if (path.len == 0)
-        return;
-    if (chdir(path.data) != 0) {
+    if (path.len == 0) {
+        struct passwd *pw = getpwuid(getuid());
+        const char *homedir = pw->pw_dir;
+        chdir(homedir);
+    }
+    else if (chdir(path.data) != 0) {
         printf("cd: %s: No such file or directory\n", path.data);
         fflush(stdout);
     }
