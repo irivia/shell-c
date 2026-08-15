@@ -50,16 +50,6 @@ bool is_space(char c)
     );
 }
 
-String trim_left(const String s)
-{
-    String str = s;
-    for (size_t i = 0; i < s.len && is_space(s.data[i]); i++) {
-        str.data++;
-        str.len--;
-    }
-    return str;
-}
-
 String trim_left_by_delim(const String s, char delim)
 {
     String str = s;
@@ -81,6 +71,32 @@ StrList split_by_delim(char *s, char delim)
         if (*s == delim || *s == '\0') {
             if (s != cur) {
                 String word = { .data = cur, .len = s - cur};
+                da_push(words, word);
+            }
+            if (*s == '\0')
+                break;
+            cur = s + 1;
+        }
+    }
+
+    return words;
+}
+
+StrList extract_words(char *s)
+{
+    if (s == NULL) return (StrList){0};
+
+    StrList words = {0};
+    char *cur = s;
+
+    for (;; s++) {
+        if (is_space(*s) || *s == '\0') {
+            if (s != cur) {
+                size_t len = s - cur;
+                char *data = (char*)malloc(len + 1);
+                memcpy(data, cur, len);
+                data[len] = '\0';
+                String word = { .data = data, .len = len };
                 da_push(words, word);
             }
             if (*s == '\0')
@@ -126,7 +142,7 @@ bool is_file_executable(const char *file)
     );
 }
 
-const char* search_path(const StrList path_dirs, const String cmd)
+char* search_path(const StrList path_dirs, const String cmd)
 {
     if (path_dirs.count == 0 || cmd.data == NULL || cmd.len == 0)
         return NULL;
@@ -200,6 +216,7 @@ void command_type(StrList path_dirs, StrList words)
     fflush(stdout);
 }
 
+
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
@@ -215,11 +232,7 @@ int main(int argc, char *argv[])
         printf("$ ");
         if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
             continue;
-        size_t buffer_len = strlen(BUFFER);
-        if (is_space(BUFFER[buffer_len - 1])) {
-            BUFFER[buffer_len - 1] = '\0';
-        }
-        StrList words = split_by_delim(BUFFER, ' ');
+        StrList words = extract_words(BUFFER);
         if (words.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {                                                                                \
@@ -227,6 +240,7 @@ int main(int argc, char *argv[])
                 matched = i;                                                                                                    \
             }                                                                                                                   \
         }                                                                                                                       \
+        char *program = NULL;
         switch (matched) {
         case CMD_EXIT:
             exit(0);
@@ -237,6 +251,8 @@ int main(int argc, char *argv[])
             command_type(path_dirs, words);
             break;
         default:
+            if ((program = search_path(path_dirs, words.items[0])) != NULL) {
+            }
             printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
             fflush(stdout);
             break;
