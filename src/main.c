@@ -32,9 +32,15 @@
         (da).count = 0; \
     } while (0)
 
+typedef enum {
+    STR_WORD,
+    STR_SYM,
+} StrType; // Too lazy to change String into Token
+
 typedef struct {
     char *data;
     size_t len;
+    StrType type;
 } String;
 
 typedef struct {
@@ -66,6 +72,11 @@ bool is_alnum(char c)
         (c >= 'A' && c <= 'Z') ||
         (c >= 0 && c <= 9)
     );
+}
+
+bool is_num(char c)
+{
+    return c >= '0' && c <= '
 }
 
 String trim_left_by_delim(const String s, char delim)
@@ -213,12 +224,15 @@ StrList extract_words(char *str)
         if (c == '\'' || c == '"') {
             String word = chop_string(&s);
             if (word.len == 0) continue;
+            word.type = STR_WORD;
             da_push(words, word);
             trim_left(&s);
         }
+        else if (c == '>' |'
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
+            word.type = STR_WORD;
             da_push(words, word);
             trim_left(&s);
         }
