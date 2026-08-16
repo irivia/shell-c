@@ -183,6 +183,11 @@ String chop_string(String *s)
             str_inc(s);
             break;
         }
+        else if (*s->data == '\\' && quote == '"') {
+            str_inc(s);
+            if (s->len > 0)
+                da_push(str, *s->data);
+        }
         else {
             da_push(str, *s->data);
         }
