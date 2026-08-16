@@ -236,7 +236,17 @@ StrList extract_words(char *str)
             da_push(words, word);
             trim_left(&s);
         }
-        else if (c == '>' |'
+        else if (s.len > 1 && is_alnum(c) && *(s.data+1) == '>') {
+        }
+        else if (c == '>') {
+            StringBuilder bob = {0};
+            da_reserve(bob, 1);
+            da_push(bob, '>');
+            da_push(bob, '\0');
+            String word = {.data = bob.items, .len = bob.count - 1};
+            word.type = STR_SYM;
+            da_push(words, word);
+        }
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
@@ -326,7 +336,7 @@ char* search_path(const StrList path_dirs, const String cmd)
 
 void command_echo(StrList words)
 {
-    for (size_t i = 1; i < words.count; i++) {
+    for (size_t i = 1; i < words.count && words.items[i].type == STR_WORD; i++) {
         printf("%.*s", (int)words.items[i].len, words.items[i].data);
         if (i < words.count - 1)
             printf(" ");
@@ -337,7 +347,7 @@ void command_echo(StrList words)
 
 void command_type(StrList path_dirs, StrList words)
 {
-    if (words.count < 2) {
+    if (words.count < 2 || words.items[1].type != STR_WORD) {
         printf("No command was provided.\n");
         fflush(stdout);
         return;
@@ -372,7 +382,7 @@ void command_pwd()
 
 void command_cd(String path)
 {
-    if (path.len == 0 || (path.len == 1 && path.data[0] == '~')) {
+    if (path.len == 0 || path.type != STR_WORD || (path.len == 1 && path.data[0] == '~')) {
         char *homedir = getenv("HOME");
         if (homedir == NULL) {
             struct passwd *pw = getpwuid(getuid());
@@ -391,7 +401,7 @@ void execute_program(const char *path, StrList args)
     if (path == NULL || args.count == 0)
         return;
     char* *arguments = (char**)malloc((args.count + 1) * sizeof(*arguments));
-    for (size_t i = 0; i < args.count; i++)
+    for (size_t i = 0; i < args.count && args.items[i].type == STR_WORD; i++)
         arguments[i] = args.items[i].data;
     arguments[args.count] = NULL;
     int pid = fork();
