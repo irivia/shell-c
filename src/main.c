@@ -131,7 +131,12 @@ String chop_word(String *s)
     StringBuilder str = {0};
 
     for (; s->len > 0 && !is_space(*s->data); str_inc(s)) {
-        if (*s->data == '\'' || *s->data == '"') {
+        if (*s->data == '\\') {
+            str_inc(s);
+            if (s->len > 0)
+                da_push(str, *s->data);
+        }
+        else if (*s->data == '\'' || *s->data == '"') {
             char quote = *s->data;
             if (s->len > 1 && *(s->data + 1) == quote)
                 str_inc(s);
