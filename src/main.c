@@ -13,7 +13,7 @@
 
 #define da_push(da, data)                                                  \
     do {                                                                   \
-        (da).capacity = (da).capacity > 0 ? (da).capacity * 2 : 32;        \
+        (da).capacity = (da).capacity > 0 ? (da).capacity * 1.5 : 32;      \
         (da).items = realloc(da.items, da.capacity * sizeof(*(da).items)); \
         (da).items[(da).count] = (data);                                   \
         (da).count += 1;                                                   \
@@ -32,16 +32,16 @@
         (da).count = 0; \
     } while (0)
 
-typedef enum {
-    STR_WORD,
-    STR_STR,
-} StrType; // Too lazy to rename everything to 'Token'
-
 typedef struct {
     char *data;
     size_t len;
-    StrType type;
 } String;
+
+typedef struct {
+    char *items;
+    size_t count;
+    size_t capacity;
+} StringBuilder;
 
 typedef struct {
     String *items;
@@ -115,34 +115,55 @@ void trim_left(String *s)
     for (; s->len > 0 && is_space(*s->data); str_inc(s));
 }
 
+String chop_word(String *s)
+{
+    if (s == NULL || s->len == 0)
+        return (String){0};
+
+    StringBuilder str = {0};
+
+    for (; s->len > 0 && !is_space(*s->data); str_inc(s)) {
+        if (*s->data == '\'') {
+            if (s->len > 1 && *(s->data + 1) == '\'')
+                str_inc(s);
+            else
+                break;
+        }
+        else {
+            da_push(str, *s->data);
+        }
+    }
+
+    if (str.count > 0) da_push(str, '\0');
+
+    return (String){ .data = str.items, .len = str.count > 0 ? str.count - 1 : 0 };
+}
+
 String chop_string(String *s)
 {
     if (s == NULL || s->len == 0 || s->data[0] != '\'')
         return (String){0};
 
     str_inc(s);
-    String word = { .data = s->data };
+    StringBuilder str = {0};
 
-    for (; s->len > 0 && *s->data != '\''; str_inc(s))
-        word.len++;
+    for (; s->len > 0; str_inc(s)) {
+        if (*s->data == '\'') {
+            if (s->len > 1 && *(s->data+1) == '\'') {
+                str_inc(s);
+            }
+            else {
+                str_inc(s);
+                break;
+            }
+        }
+        else {
+            da_push(str, *s->data);
+        }
+    }
+    if (str.count > 0) da_push(str, '\0');
 
-    if (*s->data == '\'')
-        str_inc(s);
-
-    return word;
-}
-
-String chop_word(String *s)
-{
-    if (s == NULL || s->len == 0)
-        return (String){0};
-
-    String word = { .data = s->data };
-
-    for (; s->len > 0 && is_alnum(*s->data); str_inc(s))
-        word.len++;
-
-    return word;
+    return (String){ .data = str.items, .len = str.count > 0 ? str.count - 1 : 0 };
 }
 
 StrList extract_words(char *str)
@@ -157,32 +178,17 @@ StrList extract_words(char *str)
 
     while (s.len > 0) {
         char c = *s.data;
-        if (is_alnum(c)){
-            String word = chop_word(&s);
-            if (word.len == 0) continue;
-
-            char *data = (char*)malloc(word.len + 1);
-            memcpy(data, word.data, word.len);
-            data[word.len] = '\0';
-            word.data = data;
-            word.type = STR_WORD;
-            da_push(words, word);
-            trim_left(&s);
-        }
-        else if (c == '\'') {
+        if (c == '\'') {
             String word = chop_string(&s);
             if (word.len == 0) continue;
-
-            char *data = (char*)malloc(word.len + 1);
-            memcpy(data, word.data, word.len);
-            data[word.len] = '\0';
-            word.data = data;
-            word.type = STR_STR;
             da_push(words, word);
             trim_left(&s);
         }
         else {
-            str_inc(&s);
+            String word = chop_word(&s);
+            if (word.len == 0) continue;
+            da_push(words, word);
+            trim_left(&s);
         }
     }
 
@@ -268,7 +274,7 @@ void command_echo(StrList words)
 {
     for (size_t i = 1; i < words.count; i++) {
         printf("%.*s", (int)words.items[i].len, words.items[i].data);
-        if (i < words.count - 1 && words.items[i].type == STR_WORD)
+        if (i < words.count - 1)
             printf(" ");
     }
     printf("\n");
