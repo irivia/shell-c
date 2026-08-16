@@ -21,6 +21,12 @@
         (da).count += 1;                                                       \
     } while (0)
 
+#define da_reserve(da, sz)                                                     \
+    do {                                                                       \
+        (da).capacity = (sz);                                                  \
+        (da).items = realloc((da).items, (da).capacity * sizeof(*(da).items)); \
+    } while (0)
+
 #define da_free(da)        \
     do {                   \
         free((da).items);  \
