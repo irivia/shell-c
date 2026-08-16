@@ -110,7 +110,7 @@ void str_inc(String *s)
 
 void trim_left(String *s)
 {
-    if (s == NULL || s->len == 0) return;
+    if (s == NULL) return;
 
     for (; s->len > 0 && is_space(*s->data); str_inc(s));
 }
