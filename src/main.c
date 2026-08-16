@@ -236,17 +236,6 @@ StrList extract_words(char *str)
             da_push(words, word);
             trim_left(&s);
         }
-        else if (s.len > 1 && is_alnum(c) && *(s.data+1) == '>') {
-        }
-        else if (c == '>') {
-            StringBuilder bob = {0};
-            da_reserve(bob, 1);
-            da_push(bob, '>');
-            da_push(bob, '\0');
-            String word = {.data = bob.items, .len = bob.count - 1};
-            word.type = STR_SYM;
-            da_push(words, word);
-        }
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
