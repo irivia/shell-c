@@ -32,9 +32,15 @@
         (da).count = 0; \
     } while (0)
 
+typedef enum {
+    STR_WORD,
+    STR_STR,
+} StrType; // Too lazy to rename everything to 'Token'
+
 typedef struct {
     char *data;
     size_t len;
+    StrType type;
 } String;
 
 typedef struct {
@@ -50,6 +56,15 @@ bool is_space(char c)
         c == '\n' ||
         c == '\t' ||
         c == '\r'
+    );
+}
+
+bool is_alnum(char c)
+{
+    return (
+        (c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z') ||
+        (c >= 0 && c <= 9)
     );
 }
 
@@ -85,26 +100,89 @@ StrList split_by_delim(char *s, char delim)
     return words;
 }
 
-StrList extract_words(char *s)
+void str_inc(String *s)
 {
-    if (s == NULL) return (StrList){0};
+    if (s == NULL || s->len == 0) return;
+
+    s->data++;
+    s->len--;
+}
+
+void trim_left(String *s)
+{
+    if (s == NULL || s->len == 0) return;
+
+    for (; s->len > 0 && is_space(*s->data); str_inc(s));
+}
+
+String chop_string(String *s)
+{
+    if (s == NULL || s->len == 0 || s->data[0] != '\'')
+        return (String){0};
+
+    str_inc(s);
+    String word = { .data = s->data };
+
+    for (; s->len > 0 && *s->data != '\''; str_inc(s))
+        word.len++;
+
+    if (*s->data == '\'')
+        str_inc(s);
+
+    return word;
+}
+
+String chop_word(String *s)
+{
+    if (s == NULL || s->len == 0)
+        return (String){0};
+
+    String word = { .data = s->data };
+
+    for (; s->len > 0 && is_alnum(*s->data); str_inc(s))
+        word.len++;
+
+    return word;
+}
+
+StrList extract_words(char *str)
+{
+    if (str == NULL)
+        return (StrList){0};
 
     StrList words = {0};
-    char *cur = s;
 
-    for (;; s++) {
-        if (is_space(*s) || *s == '\0') {
-            if (s != cur) {
-                size_t len = s - cur;
-                char *data = (char*)malloc(len + 1);
-                memcpy(data, cur, len);
-                data[len] = '\0';
-                String word = { .data = data, .len = len };
-                da_push(words, word);
-            }
-            if (*s == '\0')
-                break;
-            cur = s + 1;
+    String s = { .data = str, .len = strlen(str) };
+    trim_left(&s);
+
+    while (s.len > 0) {
+        char c = *s.data;
+        if (is_alnum(c)){
+            String word = chop_word(&s);
+            if (word.len == 0) continue;
+
+            char *data = (char*)malloc(word.len + 1);
+            memcpy(data, word.data, word.len);
+            data[word.len] = '\0';
+            word.data = data;
+            word.type = STR_WORD;
+            da_push(words, word);
+            trim_left(&s);
+        }
+        else if (c == '\'') {
+            String word = chop_string(&s);
+            if (word.len == 0) continue;
+
+            char *data = (char*)malloc(word.len + 1);
+            memcpy(data, word.data, word.len);
+            data[word.len] = '\0';
+            word.data = data;
+            word.type = STR_STR;
+            da_push(words, word);
+            trim_left(&s);
+        }
+        else {
+            str_inc(&s);
         }
     }
 
@@ -190,7 +268,7 @@ void command_echo(StrList words)
 {
     for (size_t i = 1; i < words.count; i++) {
         printf("%.*s", (int)words.items[i].len, words.items[i].data);
-        if (i < words.count - 1)
+        if (i < words.count - 1 && words.items[i].type == STR_WORD)
             printf(" ");
     }
     printf("\n");
