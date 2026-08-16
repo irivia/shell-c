@@ -72,13 +72,13 @@ bool is_alnum(char c)
     return (
         (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
-        (c >= 0 && c <= 9)
+        (c >= '0' && c <= '9')
     );
 }
 
 bool is_num(char c)
 {
-    return c >= '0' && c <= '
+    return c >= '0' && c <= '9';
 }
 
 String trim_left_by_delim(const String s, char delim)
