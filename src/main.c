@@ -123,8 +123,9 @@ String chop_word(String *s)
     StringBuilder str = {0};
 
     for (; s->len > 0 && !is_space(*s->data); str_inc(s)) {
-        if (*s->data == '\'') {
-            if (s->len > 1 && *(s->data + 1) == '\'')
+        if (*s->data == '\'' || *s->data == '"') {
+            char quote = *s->data;
+            if (s->len > 1 && *(s->data + 1) == quote)
                 str_inc(s);
             else
                 break;
@@ -141,16 +142,20 @@ String chop_word(String *s)
 
 String chop_string(String *s)
 {
-    if (s == NULL || s->len == 0 || s->data[0] != '\'')
+    if (s == NULL || s->len == 0 || (*s->data != '\'' && *s->data != '"'))
         return (String){0};
 
-    str_inc(s);
     StringBuilder str = {0};
+    char quote = *s->data;
+    str_inc(s);
 
     for (; s->len > 0; str_inc(s)) {
-        if (*s->data == '\'') {
-            if (s->len > 1 && *(s->data+1) == '\'') {
+        if (*s->data == quote) {
+            if (s->len > 1 && *(s->data+1) == quote) {
                 str_inc(s);
+            }
+            else if (quote == '"' && s->len > 1 && !is_space(*(s->data+1))) {
+                continue;
             }
             else {
                 str_inc(s);
@@ -178,7 +183,7 @@ StrList extract_words(char *str)
 
     while (s.len > 0) {
         char c = *s.data;
-        if (c == '\'') {
+        if (c == '\'' || c == '"') {
             String word = chop_string(&s);
             if (word.len == 0) continue;
             da_push(words, word);
