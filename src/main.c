@@ -115,6 +115,14 @@ void trim_left(String *s)
     for (; s->len > 0 && is_space(*s->data); str_inc(s));
 }
 
+void trim_right(String *s)
+{
+    if (s == NULL) return;
+
+    for (size_t i = s->len - 1; s->len > 0 &&
+        is_space(s->data[i]); i--) s->len--;
+}
+
 String chop_word(String *s)
 {
     if (s == NULL || s->len == 0)
@@ -181,6 +189,7 @@ StrList extract_words(char *str)
 
     String s = { .data = str, .len = strlen(str) };
     trim_left(&s);
+    trim_right(&s);
 
     while (s.len > 0) {
         char c = *s.data;
