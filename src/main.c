@@ -11,12 +11,14 @@
 #include <unistd.h>
 #include <pwd.h>
 
-#define da_push(da, data)                                                  \
-    do {                                                                   \
-        (da).capacity = (da).capacity > 0 ? (da).capacity * 1.5 : 32;      \
-        (da).items = realloc(da.items, da.capacity * sizeof(*(da).items)); \
-        (da).items[(da).count] = (data);                                   \
-        (da).count += 1;                                                   \
+#define da_push(da, data)                                                      \
+    do {                                                                       \
+        if ((da).count >= (da).capacity) {                                     \
+            (da).capacity = (da).capacity > 0 ? (da).capacity * 1.5 : 32;      \
+            (da).items = realloc(da.items, da.capacity * sizeof(*(da).items)); \
+        }                                                                      \
+        (da).items[(da).count] = (data);                                       \
+        (da).count += 1;                                                       \
     } while (0)
 
 #define da_free(da)        \
