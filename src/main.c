@@ -151,16 +151,17 @@ String chop_string(String *s)
 
     for (; s->len > 0; str_inc(s)) {
         if (*s->data == quote) {
-            if (s->len > 1 && *(s->data+1) == quote) {
-                str_inc(s);
+            if (s->len > 1) {
+                if (*(s->data+1) == quote) {
+                    str_inc(s);
+                    continue;
+                }
+                else if (quote == '"' && !is_space(*(s->data+1))) {
+                    continue;
+                }
             }
-            else if (quote == '"' && s->len > 1 && !is_space(*(s->data+1))) {
-                continue;
-            }
-            else {
-                str_inc(s);
-                break;
-            }
+            str_inc(s);
+            break;
         }
         else {
             da_push(str, *s->data);
