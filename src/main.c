@@ -504,7 +504,7 @@ void execute_program(const char *path, StrList args)
 
     int redfd = -1;
     String redirect = {0};
-    const char *mode = "wb";
+    const char *mode;
 
     StrList program_args = {0};
     for (size_t i = 0; i < args.count; i++) {
