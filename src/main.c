@@ -176,6 +176,11 @@ bool expected(String *s, char c)
     return s->len > 1 && s->data[1] == c;
 }
 
+bool expected_off(String *s, char c, size_t offset)
+{
+    return s->len > offset && s->data[offset] == c;
+}
+
 String chop_string(String *s);
 
 String chop_word(String *s)
@@ -272,6 +277,18 @@ StrList extract_words(char *str)
             str_inc(&s);
             da_push(words, to_str_fmt("%c>", c));
         }
+        else if ((c == '1' || c == '2') && expected(&s, '>')
+            && expected_off(&s, '>', 2)) {
+            str_inc(&s);
+            str_inc(&s);
+            str_inc(&s);
+            da_push(words, to_str_fmt("%c>>", c));
+        }
+        else if (c == '>' && expected(&s, '>')) {
+            str_inc(&s);
+            str_inc(&s);
+            da_push(words, to_str(">>"));
+        }
         else if (c == '>') {
             str_inc(&s);
             da_push(words, to_str(">"));
@@ -361,13 +378,13 @@ char* search_path(const StrList path_dirs, const String cmd)
     return NULL;
 }
 
-int redirect_to(int fd, const char *filename)
+int redirect_to(int fd, const char *filename, const char *mode)
 {
     if (filename == NULL || fd < 0) return -1;
 
     FILE *f;
     int filed;
-    f = fopen(filename, "wb");
+    f = fopen(filename, mode);
     if (f == NULL) return -1;
 
     filed = fileno(f);
@@ -379,6 +396,24 @@ int redirect_to(int fd, const char *filename)
     close(filed);
 
     return newfd;
+}
+
+int redirect_where(String arg, const char* *mode)
+{
+    *mode = "wb";
+    if (str_equ(arg, ">") || str_equ(arg, "1>"))
+        return STDOUT_FILENO;
+    if (str_equ(arg, "2>"))
+        return STDERR_FILENO;
+    if (str_equ(arg, ">>") || str_equ(arg, "1>>")) {
+        *mode = "ab";
+        return STDOUT_FILENO;
+    }
+    if (str_equ(arg, "2>>")) {
+        *mode = "ab";
+        return STDERR_FILENO;
+    }
+    return -1;
 }
 
 void command_echo(StrList words)
@@ -450,17 +485,13 @@ void execute_program(const char *path, StrList args)
 
     int redfd = -1;
     String redirect = {0};
+    const char *mode = "wb";
 
     StrList program_args = {0};
     for (size_t i = 0; i < args.count; i++) {
         String arg = args.items[i];
-        if (str_equ(arg, ">"))
-            redfd = STDOUT_FILENO;
-        else if (str_equ(arg, "1>"))
-            redfd = STDOUT_FILENO;
-        else if (str_equ(arg, "2>"))
-            redfd = STDERR_FILENO;
-        else
+        redfd = redirect_where(arg, &mode);
+        if (redfd < 0)
             da_push(program_args, arg);
         if (redfd > 0 && i + 1 < args.count) {
             redirect = args.items[i + 1];
@@ -478,7 +509,7 @@ void execute_program(const char *path, StrList args)
     int fd;
     if (pid == 0) {
         if (redfd > 0 && redirect.len > 0) {
-            fd = redirect_to(redfd, redirect.data);
+            fd = redirect_to(redfd, redirect.data, mode);
         }
         execv(path, arguments);
     }
@@ -494,17 +525,13 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
 
     int redfd = -1;
     String redirect = {0};
+    const char *mode;
 
     StrList program_args = {0};
     for (size_t i = 1; i < cmd.count; i++) { // we start from 1 because 0 is for the command name
         String arg = cmd.items[i];
-        if (str_equ(arg, ">"))
-            redfd = STDOUT_FILENO;
-        else if (str_equ(arg, "1>"))
-            redfd = STDOUT_FILENO;
-        else if (str_equ(arg, "2>"))
-            redfd = STDERR_FILENO;
-        else
+        redfd = redirect_where(arg, &mode);
+        if (redfd < 0)
             da_push(program_args, arg);
         if (redfd > 0 && i + 1 < cmd.count) {
             redirect = cmd.items[i + 1];
@@ -514,7 +541,7 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
 
     int saved_fd = dup(redfd);
     if (redfd > 0 && redirect.len > 0) {
-        redirect_to(redfd, redirect.data);
+        redirect_to(redfd, redirect.data, mode);
     }
     switch (type) {
     case CMD_EXIT:
