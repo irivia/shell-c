@@ -40,15 +40,11 @@
         (da).count = 0; \
     } while (0)
 
-typedef enum {
-    STR_WORD,
-    STR_SYM,
-} StrType; // Too lazy to change String into Token
+#define da_foreach(da, iter) for (typeof((da).items) iter = (da).items; iter != &(da).items[(da).count]; iter++)
 
 typedef struct {
     char *data;
     size_t len;
-    StrType type;
 } String;
 
 typedef struct {
@@ -85,6 +81,11 @@ bool is_alnum(char c)
 bool is_num(char c)
 {
     return c >= '0' && c <= '9';
+}
+
+bool str_equ(String x, const char *s)
+{
+    return s != NULL && strlen(s) == x.len && memcmp(s, x.data, x.len) == 0;
 }
 
 String trim_left_by_delim(const String s, char delim)
@@ -164,7 +165,7 @@ String chop_word(String *s)
         }
         else if (*s->data == '\'' || *s->data == '"') {
             char quote = *s->data;
-            if (s->len > 1 && *(s->data + 1) == quote)
+            if (expected(s, quote))
                 str_inc(s);
             else {
                 String string = chop_string(s);
@@ -233,14 +234,12 @@ StrList extract_words(char *str)
         if (c == '\'' || c == '"') {
             String word = chop_string(&s);
             if (word.len == 0) continue;
-            word.type = STR_WORD;
             da_push(words, word);
             trim_left(&s);
         }
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
-            word.type = STR_WORD;
             da_push(words, word);
             trim_left(&s);
         }
@@ -326,7 +325,7 @@ char* search_path(const StrList path_dirs, const String cmd)
 
 void command_echo(StrList words)
 {
-    for (size_t i = 1; i < words.count && words.items[i].type == STR_WORD; i++) {
+    for (size_t i = 1; i < words.count; i++) {
         printf("%.*s", (int)words.items[i].len, words.items[i].data);
         if (i < words.count - 1)
             printf(" ");
@@ -337,7 +336,7 @@ void command_echo(StrList words)
 
 void command_type(StrList path_dirs, StrList words)
 {
-    if (words.count < 2 || words.items[1].type != STR_WORD) {
+    if (words.count < 2) {
         printf("No command was provided.\n");
         fflush(stdout);
         return;
@@ -372,7 +371,7 @@ void command_pwd()
 
 void command_cd(String path)
 {
-    if (path.len == 0 || path.type != STR_WORD || (path.len == 1 && path.data[0] == '~')) {
+    if (path.len == 0 || (path.len == 1 && path.data[0] == '~')) {
         char *homedir = getenv("HOME");
         if (homedir == NULL) {
             struct passwd *pw = getpwuid(getuid());
@@ -390,16 +389,52 @@ void execute_program(const char *path, StrList args)
 {
     if (path == NULL || args.count == 0)
         return;
-    char* *arguments = (char**)malloc((args.count + 1) * sizeof(*arguments));
-    for (size_t i = 0; i < args.count && args.items[i].type == STR_WORD; i++)
-        arguments[i] = args.items[i].data;
-    arguments[args.count] = NULL;
+
+    int redfd = -1;
+    String redirect = {0};
+
+    StrList program_args = {0};
+    for (size_t i = 0; i < args.count; i++) {
+        String arg = args.items[i];
+        if (redfd > 0) {
+            redirect = arg;
+            break;
+        }
+        else if (str_equ(arg, ">"))
+            redfd = 1;
+        else if (str_equ(arg, "1>"))
+            redfd = 1;
+        else if (str_equ(arg, "2>"))
+            redfd = 2;
+        else
+            da_push(program_args, arg);
+    }
+    char* *arguments = (char**)malloc((program_args.count + 1) * sizeof(*arguments));
+    for (size_t i = 0; i < program_args.count; i++) {
+        arguments[i] = program_args.items[i].data;
+    }
+    arguments[program_args.count] = NULL;
+
+
     int pid = fork();
+    FILE *f;
+    int fd;
     if (pid == 0) {
+        if (redfd > 0 && redirect.len > 0) {
+            f = fopen(redirect.data, "wb");
+            if (f != NULL) {
+                fd = fileno(f);
+                if (fd != -1) {
+                    dup2(fd, redfd);
+                }
+            }
+        }
         execv(path, arguments);
     }
     else {
         wait(NULL);
+        if (fd != -1)
+            close(fd);
         free(arguments);
     }
 }
