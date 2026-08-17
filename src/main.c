@@ -203,6 +203,9 @@ String chop_word(String *s)
                 if (is_space(*s->data)) break;
             }
         }
+        else if (*s->data == '>') {
+            break;
+        }
         else {
             da_push(str, *s->data);
         }
@@ -254,28 +257,28 @@ StrList extract_words(char *str)
     StrList words = {0};
 
     String s = { .data = str, .len = strlen(str) };
-    trim_left(&s);
     trim_right(&s);
 
     while (s.len > 0) {
+        trim_left(&s);
         char c = *s.data;
         if (c == '\'' || c == '"') {
             String word = chop_string(&s);
             if (word.len == 0) continue;
             da_push(words, word);
-            trim_left(&s);
         }
         else if (c == '>') {
+            str_inc(&s);
             da_push(words, to_str(">"));
         }
         else if ((c == '1' || c == '2') && expected(&s, '>')) {
+            str_inc(&s);
             da_push(words, to_str_fmt("%c>", c));
         }
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
             da_push(words, word);
-            trim_left(&s);
         }
     }
 
@@ -357,6 +360,24 @@ char* search_path(const StrList path_dirs, const String cmd)
     return NULL;
 }
 
+int redirect_to(int fd, const char *filename)
+{
+    if (filename == NULL || fd < 0) return -1;
+
+    FILE *f;
+    int filed;
+    f = fopen(filename, "wb");
+    if (f == NULL) return -1;
+
+    filed = fileno(f);
+    if (filed == -1 || dup2(filed, fd) == -1) {
+        fclose(f);
+        return -1;
+    }
+
+    return filed;
+}
+
 void command_echo(StrList words)
 {
     for (size_t i = 1; i < words.count; i++) {
@@ -430,11 +451,7 @@ void execute_program(const char *path, StrList args)
     StrList program_args = {0};
     for (size_t i = 0; i < args.count; i++) {
         String arg = args.items[i];
-        if (redfd > 0) {
-            redirect = arg;
-            break;
-        }
-        else if (str_equ(arg, ">"))
+        if (str_equ(arg, ">"))
             redfd = 1;
         else if (str_equ(arg, "1>"))
             redfd = 1;
@@ -442,26 +459,22 @@ void execute_program(const char *path, StrList args)
             redfd = 2;
         else
             da_push(program_args, arg);
+        if (redfd > 0 && i + 1 < args.count) {
+            redirect = args.items[i + 1];
+            break;
+        }
     }
-    char* *arguments = (char**)malloc((program_args.count + 1) * sizeof(*arguments));
-    for (size_t i = 0; i < program_args.count; i++) {
+
+    char* *arguments = (char**)malloc(sizeof(*arguments) * (program_args.count + 1));
+    for (size_t i = 0; i < program_args.count; i++)
         arguments[i] = program_args.items[i].data;
-    }
     arguments[program_args.count] = NULL;
 
-
     int pid = fork();
-    FILE *f;
     int fd;
     if (pid == 0) {
         if (redfd > 0 && redirect.len > 0) {
-            f = fopen(redirect.data, "wb");
-            if (f != NULL) {
-                fd = fileno(f);
-                if (fd != -1) {
-                    dup2(fd, redfd);
-                }
-            }
+            fd = redirect_to(redfd, redirect.data);
         }
         execv(path, arguments);
     }
