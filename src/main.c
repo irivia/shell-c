@@ -272,17 +272,17 @@ StrList extract_words(char *str)
             if (word.len == 0) continue;
             da_push(words, word);
         }
-        else if ((c == '1' || c == '2') && expected(&s, '>')) {
-            str_inc(&s);
-            str_inc(&s);
-            da_push(words, to_str_fmt("%c>", c));
-        }
         else if ((c == '1' || c == '2') && expected(&s, '>')
             && expected_off(&s, '>', 2)) {
             str_inc(&s);
             str_inc(&s);
             str_inc(&s);
             da_push(words, to_str_fmt("%c>>", c));
+        }
+        else if ((c == '1' || c == '2') && expected(&s, '>')) {
+            str_inc(&s);
+            str_inc(&s);
+            da_push(words, to_str_fmt("%c>", c));
         }
         else if (c == '>' && expected(&s, '>')) {
             str_inc(&s);
