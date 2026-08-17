@@ -455,11 +455,11 @@ void execute_program(const char *path, StrList args)
     for (size_t i = 0; i < args.count; i++) {
         String arg = args.items[i];
         if (str_equ(arg, ">"))
-            redfd = 1;
+            redfd = STDOUT_FILENO;
         else if (str_equ(arg, "1>"))
-            redfd = 1;
+            redfd = STDOUT_FILENO;
         else if (str_equ(arg, "2>"))
-            redfd = 2;
+            redfd = STDERR_FILENO;
         else
             da_push(program_args, arg);
         if (redfd > 0 && i + 1 < args.count) {
@@ -499,11 +499,11 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
     for (size_t i = 1; i < cmd.count; i++) { // we start from 1 because 0 is for the command name
         String arg = cmd.items[i];
         if (str_equ(arg, ">"))
-            redfd = 1;
+            redfd = STDOUT_FILENO;
         else if (str_equ(arg, "1>"))
-            redfd = 1;
+            redfd = STDOUT_FILENO;
         else if (str_equ(arg, "2>"))
-            redfd = 2;
+            redfd = STDERR_FILENO;
         else
             da_push(program_args, arg);
         if (redfd > 0 && i + 1 < cmd.count) {
@@ -512,44 +512,36 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
         }
     }
 
-    int pid = fork();
-    int fd;
-
-    if (pid == 0) {
-        if (redfd > 0 && redirect.len > 0) {
-            fd = redirect_to(redfd, redirect.data);
-        }
-        switch (type) {
-        case CMD_EXIT:
-            exit(0);
-        case CMD_ECHO:
-            command_echo(program_args);
-            break;
-        case CMD_TYPE:
-            command_type(path_dirs, program_args);
-            break;
-        case CMD_PWD:
-            command_pwd();
-            break;
-        case CMD_CD:
-            if (cmd.count > 1)
-                command_cd(program_args.items[0]);
-            else
-                command_cd((String){0});
-            break;
-        default:
-            fprintf(stderr, "Invalid command: %d\n", type);
-        }
-        // not returning with 0 so the stat_loc let's the parent process know that we used exit()
-        exit(69);
+    int saved_fd = dup(redfd);
+    if (redfd > 0 && redirect.len > 0) {
+        redirect_to(redfd, redirect.data);
     }
-    else {
-        int stat;
-        wait(&stat);
-        da_free(program_args);
-        if (stat == 0)
-            exit(0);
+    switch (type) {
+    case CMD_EXIT:
+        exit(0);
+    case CMD_ECHO:
+        command_echo(program_args);
+        break;
+    case CMD_TYPE:
+        command_type(path_dirs, program_args);
+        break;
+    case CMD_PWD:
+        command_pwd();
+        break;
+    case CMD_CD:
+        if (cmd.count > 1)
+            command_cd(program_args.items[0]);
+        else
+            command_cd((String){0});
+        break;
+    default:
+        fprintf(stderr, "Invalid command: %d\n", type);
     }
+    if (redfd > 0 && redirect.len > 0) {
+        dup2(saved_fd, redfd);
+        close(saved_fd);
+    }
+    da_free(program_args);
 }
 
 int main(int argc, char *argv[])
