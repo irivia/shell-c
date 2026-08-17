@@ -142,6 +142,11 @@ void trim_right(String *s)
         is_space(s->data[i]); i--) s->len--;
 }
 
+bool expected(String *s, char c)
+{
+    return s->len > 1 && s->data[1] == c;
+}
+
 String chop_string(String *s);
 
 String chop_word(String *s)
@@ -190,17 +195,13 @@ String chop_string(String *s)
 
     for (; s->len > 0; str_inc(s)) {
         if (*s->data == quote) {
-            if (s->len > 1) {
-                if (*(s->data+1) == quote) {
-                    str_inc(s);
-                    continue;
-                }
-                if (!is_space(*(s->data+1))) {
-                    continue;
-                }
+            if (expected(s, quote)) {
+                str_inc(s);
             }
-            str_inc(s);
-            break;
+            else if (s->len > 1 && is_space(s->data[1])) {
+                str_inc(s);
+                break;
+            }
         }
         else if (*s->data == '\\' && quote == '"') {
             str_inc(s);
