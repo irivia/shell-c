@@ -371,12 +371,14 @@ int redirect_to(int fd, const char *filename)
     if (f == NULL) return -1;
 
     filed = fileno(f);
-    if (filed == -1 || dup2(filed, fd) == -1) {
+    int newfd;
+    if (filed == -1 || (newfd = dup2(filed, fd)) == -1) {
         fclose(f);
         return -1;
     }
+    close(filed);
 
-    return filed;
+    return newfd;
 }
 
 void command_echo(StrList words)
@@ -482,8 +484,6 @@ void execute_program(const char *path, StrList args)
     }
     else {
         wait(NULL);
-        if (fd != -1)
-            close(fd);
         free(arguments);
     }
 }
@@ -546,8 +546,6 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
     else {
         int stat;
         wait(&stat);
-        if (fd != -1)
-            close(fd);
         da_free(program_args);
         if (stat == 0)
             exit(0);
