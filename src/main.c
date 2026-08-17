@@ -380,7 +380,7 @@ int redirect_to(int fd, const char *filename)
 
 void command_echo(StrList words)
 {
-    for (size_t i = 1; i < words.count; i++) {
+    for (size_t i = 0; i < words.count; i++) {
         printf("%.*s", (int)words.items[i].len, words.items[i].data);
         if (i < words.count - 1)
             printf(" ");
@@ -391,7 +391,7 @@ void command_echo(StrList words)
 
 void command_type(StrList path_dirs, StrList words)
 {
-    if (words.count < 2) {
+    if (words.count < 1) {
         printf("No command was provided.\n");
         fflush(stdout);
         return;
@@ -399,18 +399,18 @@ void command_type(StrList path_dirs, StrList words)
     int matched = -1;
     const char *buf;
     for (size_t i = 0; i < CMD_COUNT; i++) {
-        if (words.items[1].len == commands[i].len && memcmp(words.items[1].data, commands[i].data, commands[i].len) == 0) {
+        if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
             matched = i;
         }
     }
     if (matched != -1) {
-        printf("%.*s is a shell builtin\n", (int)words.items[1].len, words.items[1].data);
+        printf("%.*s is a shell builtin\n", (int)words.items[0].len, words.items[0].data);
     }
-    else if ((buf = search_path(path_dirs, words.items[1])) != NULL) {
-        printf("%.*s is %s\n", (int)words.items[1].len, words.items[1].data, buf);
+    else if ((buf = search_path(path_dirs, words.items[0])) != NULL) {
+        printf("%.*s is %s\n", (int)words.items[0].len, words.items[0].data, buf);
     }
     else {
-        printf("%.*s: not found\n", (int)words.items[1].len, words.items[1].data);
+        printf("%.*s: not found\n", (int)words.items[0].len, words.items[0].data);
     }
     fflush(stdout);
 }
@@ -487,6 +487,72 @@ void execute_program(const char *path, StrList args)
     }
 }
 
+void execute_command(Commands type, StrList cmd, StrList path_dirs)
+{
+    if (cmd.count == 0) return;
+
+    int redfd = -1;
+    String redirect = {0};
+
+    StrList program_args = {0};
+    for (size_t i = 1; i < cmd.count; i++) { // we start from 1 because 0 is for the command name
+        String arg = cmd.items[i];
+        if (str_equ(arg, ">"))
+            redfd = 1;
+        else if (str_equ(arg, "1>"))
+            redfd = 1;
+        else if (str_equ(arg, "2>"))
+            redfd = 2;
+        else
+            da_push(program_args, arg);
+        if (redfd > 0 && i + 1 < cmd.count) {
+            redirect = cmd.items[i + 1];
+            break;
+        }
+    }
+
+    int pid = fork();
+    int fd;
+
+    if (pid == 0) {
+        if (redfd > 0 && redirect.len > 0) {
+            fd = redirect_to(redfd, redirect.data);
+        }
+        switch (type) {
+        case CMD_EXIT:
+            exit(0);
+        case CMD_ECHO:
+            command_echo(program_args);
+            break;
+        case CMD_TYPE:
+            command_type(path_dirs, program_args);
+            break;
+        case CMD_PWD:
+            command_pwd();
+            break;
+        case CMD_CD:
+            if (cmd.count > 1)
+                command_cd(program_args.items[0]);
+            else
+                command_cd((String){0});
+            break;
+        default:
+            fprintf(stderr, "Invalid command: %d\n", type);
+        }
+        // not returning with 0 so the stat_loc let's the parent process know that we used exit()
+        exit(69);
+    }
+    else {
+        int stat;
+        wait(&stat);
+        if (fd != -1)
+            close(fd);
+        da_free(program_args);
+        if (stat == 0)
+            exit(0);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
@@ -500,6 +566,7 @@ int main(int argc, char *argv[])
 
     while (true) {
         printf("$ ");
+        fflush(stdout);
         if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
             continue;
         StrList words = extract_words(BUFFER);
@@ -512,25 +579,10 @@ int main(int argc, char *argv[])
             }
         }
         char *program = NULL;
-        switch (matched) {
-        case CMD_EXIT:
-            exit(0);
-        case CMD_ECHO:
-            command_echo(words);
-            break;
-        case CMD_TYPE:
-            command_type(path_dirs, words);
-            break;
-        case CMD_PWD:
-            command_pwd();
-            break;
-        case CMD_CD:
-            if (words.count > 1)
-                command_cd(words.items[1]);
-            else
-                command_cd((String){0});
-            break;
-        default:
+        if (matched != -1) {
+            execute_command(matched, words, path_dirs);
+        }
+        else {
             if ((program = search_path(path_dirs, words.items[0])) != NULL) {
                 execute_program(program, words);
             }
@@ -538,7 +590,6 @@ int main(int argc, char *argv[])
                 printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
                 fflush(stdout);
             }
-            break;
         }
         da_free(words);
     }
