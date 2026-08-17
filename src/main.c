@@ -269,6 +269,7 @@ StrList extract_words(char *str)
         }
         else if ((c == '1' || c == '2') && expected(&s, '>')) {
             str_inc(&s);
+            str_inc(&s);
             da_push(words, to_str_fmt("%c>", c));
         }
         else if (c == '>') {
