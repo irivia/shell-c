@@ -469,6 +469,7 @@ void execute_program(const char *path, StrList args)
     for (size_t i = 0; i < program_args.count; i++)
         arguments[i] = program_args.items[i].data;
     arguments[program_args.count] = NULL;
+    da_free(program_args);
 
     int pid = fork();
     int fd;
