@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
+#include <stdarg.h>
 #include <pwd.h>
 
 #define da_push(da, data)                                                      \
@@ -81,6 +82,33 @@ bool is_alnum(char c)
 bool is_num(char c)
 {
     return c >= '0' && c <= '9';
+}
+
+String to_str(const char *s)
+{
+    if (s == NULL) return (String){0};
+
+    return (String) {
+        .data = (char*)s,
+        .len = strlen(s)
+    };
+}
+
+String to_str_fmt(const char *fmt, ...)
+{
+    va_list va;
+    va_start(va, fmt);
+    char *p;
+    int printed = vasprintf(&p, fmt, va);
+    va_end(va);
+
+    if (printed <= 0)
+        return (String){0};
+
+    return (String) {
+        .data = p,
+        .len = printed
+    };
 }
 
 bool str_equ(String x, const char *s)
@@ -236,6 +264,12 @@ StrList extract_words(char *str)
             if (word.len == 0) continue;
             da_push(words, word);
             trim_left(&s);
+        }
+        else if (c == '>') {
+            da_push(words, to_str(">"));
+        }
+        else if ((c == '1' || c == '2') && expected(&s, '>')) {
+            da_push(words, to_str_fmt("%c>", c));
         }
         else {
             String word = chop_word(&s);
