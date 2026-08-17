@@ -267,13 +267,13 @@ StrList extract_words(char *str)
             if (word.len == 0) continue;
             da_push(words, word);
         }
-        else if (c == '>') {
-            str_inc(&s);
-            da_push(words, to_str(">"));
-        }
         else if ((c == '1' || c == '2') && expected(&s, '>')) {
             str_inc(&s);
             da_push(words, to_str_fmt("%c>", c));
+        }
+        else if (c == '>') {
+            str_inc(&s);
+            da_push(words, to_str(">"));
         }
         else {
             String word = chop_word(&s);
