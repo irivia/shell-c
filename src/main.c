@@ -156,6 +156,16 @@ void str_inc(String *s)
     s->len--;
 }
 
+void str_inc_n(String *s, size_t n)
+{
+    if (s == NULL || s->len == 0) return;
+
+    for (size_t i = 0; i < n && s->len > 0; i++) {
+        s->data++;
+        s->len--;
+    }
+}
+
 void trim_left(String *s)
 {
     if (s == NULL) return;
@@ -179,6 +189,20 @@ bool expected(String *s, char c)
 bool expected_off(String *s, char c, size_t offset)
 {
     return s->len > offset && s->data[offset] == c;
+}
+
+bool expected_str(String *s, const char *exp)
+{
+    if (exp == NULL || s->len == 0) return false;
+
+    size_t exp_len = strlen(exp);
+    size_t i = 0;
+
+    for (; i < exp_len && i < s->len; i++) {
+        if (s->data[i] != exp[i]) return false;
+    }
+
+    return exp_len == i;
 }
 
 String chop_string(String *s);
@@ -272,21 +296,16 @@ StrList extract_words(char *str)
             if (word.len == 0) continue;
             da_push(words, word);
         }
-        else if ((c == '1' || c == '2') && expected(&s, '>')
-            && expected_off(&s, '>', 2)) {
-            str_inc(&s);
-            str_inc(&s);
-            str_inc(&s);
+        else if (expected_str(&s, "1>>") || expected_str(&s, "2>>")) {
+            str_inc_n(&s, 3);
             da_push(words, to_str_fmt("%c>>", c));
         }
-        else if ((c == '1' || c == '2') && expected(&s, '>')) {
-            str_inc(&s);
-            str_inc(&s);
+        else if (expected_str(&s, "1>") || expected_str(&s, "2>")) {
+            str_inc_n(&s, 2);
             da_push(words, to_str_fmt("%c>", c));
         }
-        else if (c == '>' && expected(&s, '>')) {
-            str_inc(&s);
-            str_inc(&s);
+        else if (expected_str(&s, ">>")) {
+            str_inc_n(&s, 2);
             da_push(words, to_str(">>"));
         }
         else if (c == '>') {
