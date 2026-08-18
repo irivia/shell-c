@@ -578,7 +578,7 @@ void command_complete(StrList args)
                 return;
             }
         }
-        printf("complete: %.*s: no completion specification\n", STR_FMT(args.items[1]));
+        printf("complete: %.*s: no completion specification\n", STR_FMT(trigger));
         fflush(stdout);
     }
 }
