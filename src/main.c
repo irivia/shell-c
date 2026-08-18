@@ -730,7 +730,7 @@ char** cmd_name_completion(const char *text, int start, int end)
         da_push(args, to_str(temp_path));
         StrList envs = {0};
         da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
-        da_push(envs, to_str_fmt("COMP_POINT=%d", start));
+        da_push(envs, to_str_fmt("COMP_POINT=%d", end));
         execute_program(path.data, args, envs);
         da_free(args);
         da_free(envs);
