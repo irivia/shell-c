@@ -10,6 +10,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <libgen.h>
 #include <pwd.h>
 #include <readline/readline.h>
 
@@ -211,6 +212,23 @@ bool expected_str(String *s, const char *exp)
     }
 
     return exp_len == i;
+}
+
+String next_str(StrList *list)
+{
+    if (list->count == 0) return (String){0};
+
+    list->count--;
+    return *(list->items++);
+}
+
+bool expected_next_str(StrList list, String s)
+{
+    return (
+        list.count > 1 &&
+        list.items[1].len == s.len &&
+        memcmp(list.items[1].data, s.data, s.len) == 0
+    );
 }
 
 String chop_string(String *s);
@@ -497,7 +515,7 @@ void command_type(StrList path_dirs, StrList words)
     int matched = -1;
     const char *buf;
     for (size_t i = 0; i < CMD_COUNT; i++) {
-        if (words.items[0].len == builtin_cmds[i].len && memcmp(words.items[0].data, builtin_cmds[i].data, builtin_cmds[i].len) == 0) {
+        if (str_cmp(words.items[0], builtin_cmds[i])) {
             matched = i;
         }
     }
@@ -538,23 +556,23 @@ void command_cd(String path)
     }
 }
 
+StrList registered_completions = {0};
+
 void command_complete(StrList args)
 {
     if (args.count < 2) return;
 
-    static StrList registered_completions = {0};
-
-    if (args.count > 2 && str_equ(args.items[0], "-C")) {
-        String path_to_completer = args.items[1];
-        String trigger = args.items[2];
+    String flag = next_str(&args);
+    if (str_equ(flag, "-C")) {
+        String path_to_completer = next_str(&args);
+        String trigger = next_str(&args);
         da_push(registered_completions, trigger);
         da_push(registered_completions, path_to_completer);
     }
-    else if (str_equ(args.items[0], "-p")) {
-        String trigger = args.items[1];
-        bool found = false;
-        for (size_t i = 0; i < registered_completions.count; i += 2) {
-            if (i + 1 < registered_completions.count && str_cmp(trigger, registered_completions.items[i])) {
+    else if (str_equ(flag, "-p")) {
+        String trigger = next_str(&args);
+        for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
+            if (str_cmp(trigger, registered_completions.items[i])) {
                 printf("complete -C '%.*s' %.*s\n", STR_FMT(registered_completions.items[i+1]), STR_FMT(trigger));
                 fflush(stdout);
                 return;
@@ -683,9 +701,49 @@ char* cmd_name_generator(const char *text, int state)
 
 char** cmd_name_completion(const char *text, int start, int end)
 {
-    if (start != 0) return NULL;
-    rl_attempted_completion_over = 0;
-    return rl_completion_matches(text, cmd_name_generator);
+    if (start == 0) {
+        rl_attempted_completion_over = 0;
+        return rl_completion_matches(text, cmd_name_generator);
+    }
+    StrList words = extract_words(rl_line_buffer);
+    for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
+        String trigger = registered_completions.items[i];
+        String path = registered_completions.items[i + 1];
+        if (!str_cmp(trigger, words.items[0])) continue;
+        fflush(stdout);
+        StrList args = {0};
+        da_push(args, to_str(basename(path.data)));
+        da_push(args, to_str(">"));
+        const char *temp_path = "/tmp/my_shell_custom_completion_output";
+        da_push(args, to_str(temp_path)); 
+        execute_program(path.data, args);
+        da_free(args);
+        FILE *f = fopen(temp_path, "rb");
+        if (f) {
+            fseek(f, 0, SEEK_END);
+            long sz = ftell(f);
+            rewind(f);
+            char *buf = (char*)malloc(sz + 1);
+
+            fread(buf, 1, sz, f);
+            fclose(f);
+            buf[sz] = '\0';
+
+            char* *arr = (char**)malloc(sizeof(buf) * 2);
+            arr[0] = buf;
+            arr[1] = NULL;
+
+            da_free(words);
+            return arr;
+        }
+        else {
+            da_free(words);
+            return NULL;
+        }
+    }
+
+    da_free(words);
+    return NULL;
 }
 
 int main(int argc, char *argv[])
