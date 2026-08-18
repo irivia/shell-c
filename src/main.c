@@ -715,6 +715,9 @@ char** cmd_name_completion(const char *text, int start, int end)
         fflush(stdout);
         StrList args = {0};
         da_push(args, to_str(basename(path.data)));
+        da_foreach(words, wrd) {
+            da_push(args, *wrd);
+        }
         da_push(args, to_str(">"));
         const char *temp_path = "/tmp/my_shell_custom_completion_output";
         da_push(args, to_str(temp_path)); 
