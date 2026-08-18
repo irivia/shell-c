@@ -584,7 +584,7 @@ void command_complete(StrList args)
     }
 }
 
-void execute_program(const char *path, StrList args)
+void execute_program(const char *path, StrList args, StrList env)
 {
     if (path == NULL || args.count == 0)
         return;
@@ -611,13 +611,19 @@ void execute_program(const char *path, StrList args)
     arguments[program_args.count] = NULL;
     da_free(program_args);
 
+    char* *env_vars = (char**)malloc(sizeof(*env_vars) * (env.count + 1));
+    for (size_t i = 0; i < env.count; i++) {
+        env_vars[i] = env.items[i].data;
+    }
+    env_vars[env.count] = NULL;
+
     int pid = fork();
     int fd;
     if (pid == 0) {
         if (redfd > 0 && redirect.len > 0) {
             fd = redirect_to(redfd, redirect.data, mode);
         }
-        execv(path, arguments);
+        execve(path, arguments, env_vars);
     }
     else {
         wait(NULL);
@@ -721,9 +727,13 @@ char** cmd_name_completion(const char *text, int start, int end)
         }
         da_push(args, to_str(">"));
         const char *temp_path = "/tmp/my_shell_custom_completion_output";
-        da_push(args, to_str(temp_path)); 
-        execute_program(path.data, args);
+        da_push(args, to_str(temp_path));
+        StrList envs = {0};
+        da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
+        da_push(envs, to_str_fmt("COMP_POINT=%d", start));
+        execute_program(path.data, args, envs);
         da_free(args);
+        da_free(envs);
         FILE *f = fopen(temp_path, "rb");
         if (f) {
             fseek(f, 0, SEEK_END);
@@ -798,7 +808,7 @@ int main(int argc, char *argv[])
         }
         else {
             if ((program = search_path(path_dirs, words.items[0])) != NULL) {
-                execute_program(program, words);
+                execute_program(program, words, (StrList){0});
             }
             else {
                 printf("%.*s: command not found\n", STR_FMT(words.items[0]));
