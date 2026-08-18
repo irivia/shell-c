@@ -52,6 +52,7 @@ typedef struct {
 } String;
 
 #define STR_FMT(str) (int)(str).len, (str).data
+#define STR_NULL (String){0}
 
 typedef struct {
     char *items;
@@ -91,7 +92,7 @@ bool is_num(char c)
 
 String to_str(const char *s)
 {
-    if (s == NULL) return (String){0};
+    if (s == NULL) return STR_NULL;
 
     return (String) {
         .data = (char*)s,
@@ -108,7 +109,7 @@ String to_str_fmt(const char *fmt, ...)
     va_end(va);
 
     if (printed <= 0)
-        return (String){0};
+        return STR_NULL;
 
     return (String) {
         .data = p,
@@ -217,7 +218,7 @@ bool expected_str(String *s, const char *exp)
 
 String next_str(StrList *list)
 {
-    if (list->count == 0) return (String){0};
+    if (list->count == 0) return STR_NULL;
 
     list->count--;
     return *(list->items++);
@@ -237,7 +238,7 @@ String chop_string(String *s);
 String chop_word(String *s)
 {
     if (s == NULL || s->len == 0)
-        return (String){0};
+        return STR_NULL;
 
     StringBuilder str = {0};
 
@@ -275,7 +276,7 @@ String chop_word(String *s)
 String chop_string(String *s)
 {
     if (s == NULL || s->len == 0 || (*s->data != '\'' && *s->data != '"'))
-        return (String){0};
+        return STR_NULL;
 
     StringBuilder str = {0};
     char quote = *s->data;
@@ -671,7 +672,7 @@ void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
         if (cmd.count > 1)
             command_cd(program_args.items[0]);
         else
-            command_cd((String){0});
+            command_cd(STR_NULL);
         break;
     case CMD_COMPLETE:
         command_complete(program_args);
@@ -784,7 +785,7 @@ int main(int argc, char *argv[])
         da_push(completion_cmds, builtin_cmds[i]);
     for (size_t i = 0; i < path_execs.count; i++)
         da_push(completion_cmds, path_execs.items[i]);
-    da_push(completion_cmds, (String){0});
+    da_push(completion_cmds, STR_NULL);
     da_free(path_execs);
 
     while (true) {
