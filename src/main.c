@@ -726,8 +726,15 @@ char** cmd_name_completion(const char *text, int start, int end)
             fseek(f, 0, SEEK_END);
             long sz = ftell(f);
             rewind(f);
-            char *buf = (char*)malloc(sz + 1);
 
+            if (sz == 0) {
+                fclose(f);
+                printf("\x07");
+                fflush(stdout);
+                break;
+            }
+
+            char *buf = (char*)malloc(sz + 1);
             fread(buf, 1, sz, f);
             fclose(f);
             if (sz > 0 && buf[sz - 1] == '\n')
@@ -746,8 +753,6 @@ char** cmd_name_completion(const char *text, int start, int end)
         }
     }
 
-    printf("\x07");
-    fflush(stdout);
     da_free(words);
     return NULL;
 }
