@@ -531,6 +531,16 @@ void command_cd(String path)
     }
 }
 
+void command_complete(StrList args)
+{
+    if (args.count < 2) return;
+
+    if (str_equ(args.items[0], "-p")) {
+        printf("complete: %s: no completion specification\n", args.items[1].data);
+        fflush(stdout);
+    }
+}
+
 void execute_program(const char *path, StrList args)
 {
     if (path == NULL || args.count == 0)
@@ -613,6 +623,9 @@ void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
             command_cd(program_args.items[0]);
         else
             command_cd((String){0});
+        break;
+    case CMD_COMPLETE:
+        command_complete(program_args);
         break;
     default:
         fprintf(stderr, "Invalid command: %d\n", type);
