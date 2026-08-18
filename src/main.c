@@ -329,6 +329,7 @@ typedef enum {
     CMD_TYPE,
     CMD_PWD,
     CMD_CD,
+    CMD_COMPLETE,
     CMD_COUNT,
 } BuiltIns;
 
@@ -338,6 +339,7 @@ static String builtin_cmds[CMD_COUNT] = {
     { "type", 4 },
     { "pwd", 3 },
     { "cd", 2 },
+    { "complete", 8 },
 };
 
 const char* get_file_name(const char *path)
