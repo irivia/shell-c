@@ -642,8 +642,9 @@ char* cmd_name_generator(const char *text, int state)
     return NULL;
 }
 
-char ** cmd_name_completion(const char *text, int start, int end)
+char** cmd_name_completion(const char *text, int start, int end)
 {
+    if (start != 0) return NULL;
     rl_attempted_completion_over = 0;
     return rl_completion_matches(text, cmd_name_generator);
 }
