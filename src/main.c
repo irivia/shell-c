@@ -1,4 +1,5 @@
 #include <linux/limits.h>
+#include <readline/chardefs.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -702,9 +703,11 @@ char* cmd_name_generator(const char *text, int state)
 char** cmd_name_completion(const char *text, int start, int end)
 {
     if (start == 0) {
+    rl_completion_append_character = ' ';
         rl_attempted_completion_over = 0;
         return rl_completion_matches(text, cmd_name_generator);
     }
+    rl_completion_append_character = '\0';
     StrList words = extract_words(rl_line_buffer);
     for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
         String trigger = registered_completions.items[i];
