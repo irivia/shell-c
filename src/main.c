@@ -627,13 +627,11 @@ int main(int argc, char *argv[])
     }
 
     while (true) {
-        const char *line;
-        for (;;) {
-            rl_attempted_completion_function = cmd_name_completion;
-            line = readline("$ ");
-            if (!line)
-                break;
-        }
+        char *line;
+        rl_attempted_completion_function = cmd_name_completion;
+        line = readline("$ ");
+        if (line == NULL)
+            continue;
         // printf("$ ");
         // fflush(stdout);
         // if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
@@ -660,6 +658,7 @@ int main(int argc, char *argv[])
                 fflush(stdout);
             }
         }
+        free(line);
         da_free(words);
     }
 
