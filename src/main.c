@@ -49,6 +49,8 @@ typedef struct {
     size_t len;
 } String;
 
+#define STR_FMT(str) (int)(str).len, (str).data
+
 typedef struct {
     char *items;
     size_t count;
@@ -371,7 +373,7 @@ char* search_path(const StrList path_dirs, const String cmd)
     struct dirent *ent;
     char temp_buf[PATH_MAX];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        snprintf(temp_buf, sizeof(temp_buf), "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", STR_FMT(path_dirs.items[i]));
         if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
@@ -382,7 +384,7 @@ char* search_path(const StrList path_dirs, const String cmd)
             char *real_path = (char*)malloc(real_path_sz);
             if (real_path == NULL)
                 continue; 
-            if (snprintf(real_path, real_path_sz, "%.*s/%s", (int)path_dirs.items[i].len, path_dirs.items[i].data, ent->d_name) != real_path_sz - 1) {
+            if (snprintf(real_path, real_path_sz, "%.*s/%s", STR_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
                 free(real_path);
                 continue;
             }
@@ -409,13 +411,13 @@ StrList get_execs_from_path(StrList path_dirs)
     struct dirent *ent;
     char temp_buf[PATH_MAX];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        snprintf(temp_buf, sizeof(temp_buf), "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", STR_FMT(path_dirs.items[i]));
         if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
             const size_t ent_len = strlen(ent->d_name);
             const size_t real_path_sz = path_dirs.items[i].len + ent_len + 2; // one for '/' and one for null terminator
-            if (snprintf(temp_buf, sizeof(temp_buf), "%.*s/%s", (int)path_dirs.items[i].len, path_dirs.items[i].data, ent->d_name) != real_path_sz - 1) {
+            if (snprintf(temp_buf, sizeof(temp_buf), "%.*s/%s", STR_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
                 continue;
             }
             if (is_file_executable(temp_buf)) {
@@ -472,7 +474,7 @@ int redirect_where(String arg, const char* *mode)
 void command_echo(StrList words)
 {
     for (size_t i = 0; i < words.count; i++) {
-        printf("%.*s", (int)words.items[i].len, words.items[i].data);
+        printf("%.*s", STR_FMT(words.items[i]));
         if (i < words.count - 1)
             printf(" ");
     }
@@ -495,13 +497,13 @@ void command_type(StrList path_dirs, StrList words)
         }
     }
     if (matched != -1) {
-        printf("%.*s is a shell builtin\n", (int)words.items[0].len, words.items[0].data);
+        printf("%.*s is a shell builtin\n", STR_FMT(words.items[0]));
     }
     else if ((buf = search_path(path_dirs, words.items[0])) != NULL) {
-        printf("%.*s is %s\n", (int)words.items[0].len, words.items[0].data, buf);
+        printf("%.*s is %s\n", STR_FMT(words.items[0]), buf);
     }
     else {
-        printf("%.*s: not found\n", (int)words.items[0].len, words.items[0].data);
+        printf("%.*s: not found\n", STR_FMT(words.items[0]));
     }
     fflush(stdout);
 }
@@ -536,7 +538,7 @@ void command_complete(StrList args)
     if (args.count < 2) return;
 
     if (str_equ(args.items[0], "-p")) {
-        printf("complete: %s: no completion specification\n", args.items[1].data);
+        printf("complete: %.*s: no completion specification\n", STR_FMT(args.items[1]));
         fflush(stdout);
     }
 }
@@ -704,7 +706,7 @@ int main(int argc, char *argv[])
                 execute_program(program, words);
             }
             else {
-                printf("%.*s: command not found\n", (int)words.items[0].len, words.items[0].data);
+                printf("%.*s: command not found\n", STR_FMT(words.items[0]));
                 fflush(stdout);
             }
         }
