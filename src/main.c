@@ -119,6 +119,11 @@ bool str_equ(String x, const char *s)
     return s != NULL && strlen(s) == x.len && memcmp(s, x.data, x.len) == 0;
 }
 
+bool str_cmp(String x, String y)
+{
+    return x.len == y.len && memcmp(x.data, y.data, x.len) == 0;
+}
+
 String trim_left_by_delim(const String s, char delim)
 {
     String str = s;
@@ -537,7 +542,24 @@ void command_complete(StrList args)
 {
     if (args.count < 2) return;
 
-    if (str_equ(args.items[0], "-p")) {
+    static StrList registered_completions = {0};
+
+    if (args.count > 2 && str_equ(args.items[0], "-C")) {
+        String path_to_completer = args.items[1];
+        String trigger = args.items[2];
+        da_push(registered_completions, trigger);
+        da_push(registered_completions, path_to_completer);
+    }
+    else if (str_equ(args.items[0], "-p")) {
+        String trigger = args.items[1];
+        bool found = false;
+        for (size_t i = 0; i < registered_completions.count; i += 2) {
+            if (i + 1 < registered_completions.count && str_cmp(trigger, registered_completions.items[i])) {
+                printf("complete -C '%.*s' %.*s\n", STR_FMT(registered_completions.items[i+1]), STR_FMT(trigger));
+                fflush(stdout);
+                return;
+            }
+        }
         printf("complete: %.*s: no completion specification\n", STR_FMT(args.items[1]));
         fflush(stdout);
     }
