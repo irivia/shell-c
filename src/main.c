@@ -330,9 +330,9 @@ typedef enum {
     CMD_PWD,
     CMD_CD,
     CMD_COUNT,
-} Commands;
+} BuiltIns;
 
-static String commands[CMD_COUNT] = {
+static String builtin_cmds[CMD_COUNT] = {
     { "exit", 4 },
     { "echo", 4 },
     { "type", 4 },
@@ -488,7 +488,7 @@ void command_type(StrList path_dirs, StrList words)
     int matched = -1;
     const char *buf;
     for (size_t i = 0; i < CMD_COUNT; i++) {
-        if (words.items[0].len == commands[i].len && memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
+        if (words.items[0].len == builtin_cmds[i].len && memcmp(words.items[0].data, builtin_cmds[i].data, builtin_cmds[i].len) == 0) {
             matched = i;
         }
     }
@@ -570,7 +570,7 @@ void execute_program(const char *path, StrList args)
     }
 }
 
-void execute_command(Commands type, StrList cmd, StrList path_dirs)
+void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
 {
     if (cmd.count == 0) return;
 
@@ -659,7 +659,7 @@ int main(int argc, char *argv[])
     }
     StrList path_execs = get_execs_from_path(path_dirs);
     for (size_t i = 0; i < CMD_COUNT; i++)
-        da_push(completion_cmds, commands[i]);
+        da_push(completion_cmds, builtin_cmds[i]);
     for (size_t i = 0; i < path_execs.count; i++)
         da_push(completion_cmds, path_execs.items[i]);
     da_push(completion_cmds, (String){0});
@@ -675,8 +675,8 @@ int main(int argc, char *argv[])
         if (words.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
-            if (words.items[0].len == commands[i].len &&
-                memcmp(words.items[0].data, commands[i].data, commands[i].len) == 0) {
+            if (words.items[0].len == builtin_cmds[i].len &&
+                memcmp(words.items[0].data, builtin_cmds[i].data, builtin_cmds[i].len) == 0) {
                 matched = i;
             }
         }
