@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <stdarg.h>
 #include <pwd.h>
+#include <readline/readline.h>
 
 #define da_push(da, data)                                                      \
     do {                                                                       \
@@ -590,11 +591,35 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
     da_free(program_args);
 }
 
+char* cmd_name_generator(const char *text, int state)
+{
+    static int list_index, len;
+    char *name;
+
+    if (!state) {
+        list_index = 0;
+        len = strlen(text);
+    }
+    while ((name = commands[list_index++].data)) {
+        if (strncmp(name, text, len) == 0) {
+            return strdup(name);
+        }
+    }
+
+    return NULL;
+}
+
+char ** cmd_name_completion(const char *text, int start, int end)
+{
+    rl_attempted_completion_over = 1;
+    return rl_completion_matches(text, cmd_name_generator);
+}
+
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
-    enum { BUFFER_SZ = 2048 };
-    char BUFFER[BUFFER_SZ];
+    // enum { BUFFER_SZ = 2048 };
+    // char BUFFER[BUFFER_SZ];
     char* path = getenv("PATH");
     StrList path_dirs = {0};
     if (path != NULL) {
@@ -602,11 +627,18 @@ int main(int argc, char *argv[])
     }
 
     while (true) {
-        printf("$ ");
-        fflush(stdout);
-        if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
-            continue;
-        StrList words = extract_words(BUFFER);
+        const char *line;
+        for (;;) {
+            rl_attempted_completion_function = cmd_name_completion;
+            line = readline("$ ");
+            if (!line)
+                break;
+        }
+        // printf("$ ");
+        // fflush(stdout);
+        // if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
+        //     continue;
+        StrList words = extract_words((char*)line);
         if (words.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
