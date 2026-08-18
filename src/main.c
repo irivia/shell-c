@@ -727,6 +727,8 @@ char** cmd_name_completion(const char *text, int start, int end)
 
             fread(buf, 1, sz, f);
             fclose(f);
+            if (sz > 0 && buf[sz - 1] == '\n')
+                buf[sz - 1] = '\0';
             buf[sz] = '\0';
 
             char* *arr = (char**)malloc(sizeof(buf) * 2);
