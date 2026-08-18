@@ -398,6 +398,37 @@ char* search_path(const StrList path_dirs, const String cmd)
     return NULL;
 }
 
+StrList get_execs_from_path(StrList path_dirs)
+{
+    StrList execs = {0};
+    if (path_dirs.count == 0)
+        return execs;
+    DIR *dir;
+    struct dirent *ent;
+    char temp_buf[PATH_MAX];
+    for (size_t i = 0; i < path_dirs.count; i++) {
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", (int)path_dirs.items[i].len, path_dirs.items[i].data);
+        if ((dir = opendir(temp_buf)) == NULL)
+            continue;
+        while ((ent = readdir(dir)) != NULL) {
+            const size_t ent_len = strlen(ent->d_name);
+            const size_t real_path_sz = path_dirs.items[i].len + ent_len + 2; // one for '/' and one for null terminator
+            if (snprintf(temp_buf, sizeof(temp_buf), "%.*s/%s", (int)path_dirs.items[i].len, path_dirs.items[i].data, ent->d_name) != real_path_sz - 1) {
+                continue;
+            }
+            if (is_file_executable(temp_buf)) {
+                String s;
+                s.data = strndup(ent->d_name, ent_len);
+                s.len = ent_len;
+                da_push(execs, s);
+            }
+        }
+        closedir(dir);
+    }
+
+    return execs;
+}
+
 int redirect_to(int fd, const char *filename, const char *mode)
 {
     if (filename == NULL || fd < 0) return -1;
@@ -591,6 +622,8 @@ void execute_command(Commands type, StrList cmd, StrList path_dirs)
     da_free(program_args);
 }
 
+StrList completion_cmds = {0};
+
 char* cmd_name_generator(const char *text, int state)
 {
     static int list_index, len;
@@ -600,7 +633,7 @@ char* cmd_name_generator(const char *text, int state)
         list_index = 0;
         len = strlen(text);
     }
-    while ((name = commands[list_index++].data)) {
+    while ((name = completion_cmds.items[list_index++].data)) {
         if (strncmp(name, text, len) == 0) {
             return strdup(name);
         }
@@ -623,6 +656,12 @@ int main(int argc, char *argv[])
     if (path != NULL) {
         path_dirs = split_by_delim(path, ':');
     }
+    StrList path_execs = get_execs_from_path(path_dirs);
+    for (size_t i = 0; i < CMD_COUNT; i++)
+        da_push(completion_cmds, commands[i]);
+    for (size_t i = 0; i < path_execs.count; i++)
+        da_push(completion_cmds, path_execs.items[i]);
+    da_free(path_execs);
 
     while (true) {
         char *line;
