@@ -618,8 +618,6 @@ char ** cmd_name_completion(const char *text, int start, int end)
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
-    // enum { BUFFER_SZ = 2048 };
-    // char BUFFER[BUFFER_SZ];
     char* path = getenv("PATH");
     StrList path_dirs = {0};
     if (path != NULL) {
@@ -632,10 +630,6 @@ int main(int argc, char *argv[])
         line = readline("$ ");
         if (line == NULL)
             continue;
-        // printf("$ ");
-        // fflush(stdout);
-        // if (fgets(BUFFER, BUFFER_SZ, stdin) == NULL)
-        //     continue;
         StrList words = extract_words((char*)line);
         if (words.count == 0) continue;
         int matched = -1;
