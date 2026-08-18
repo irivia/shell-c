@@ -661,6 +661,7 @@ int main(int argc, char *argv[])
         da_push(completion_cmds, commands[i]);
     for (size_t i = 0; i < path_execs.count; i++)
         da_push(completion_cmds, path_execs.items[i]);
+    da_push(completion_cmds, (String){0});
     da_free(path_execs);
 
     while (true) {
