@@ -76,20 +76,6 @@ bool is_space(char c)
     );
 }
 
-bool is_alnum(char c)
-{
-    return (
-        (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9')
-    );
-}
-
-bool is_num(char c)
-{
-    return c >= '0' && c <= '9';
-}
-
 String to_str(const char *s)
 {
     if (s == NULL) return STR_NULL;
@@ -125,16 +111,6 @@ bool str_equ(String x, const char *s)
 bool str_cmp(String x, String y)
 {
     return x.len == y.len && memcmp(x.data, y.data, x.len) == 0;
-}
-
-String trim_left_by_delim(const String s, char delim)
-{
-    String str = s;
-    for (size_t i = 0; i < s.len && s.data[i] == delim; i++) {
-        str.data++;
-        str.len--;
-    }
-    return str;
 }
 
 StrList split_by_delim(char *s, char delim)
@@ -368,17 +344,6 @@ static String builtin_cmds[CMD_COUNT] = {
     { "cd", 2 },
     { "complete", 8 },
 };
-
-const char* get_file_name(const char *path)
-{
-    int64_t len = strlen(path);
-    for (int64_t i = len - 1; i >= 0; i--) {
-        if (path[i] == '/' && i + 1 < len) {
-            return &path[i+1];
-        }
-    }
-    return NULL;
-}
 
 bool is_file_executable(const char *file)
 {
