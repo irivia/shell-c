@@ -702,12 +702,11 @@ char* cmd_name_generator(const char *text, int state)
 
 char** cmd_name_completion(const char *text, int start, int end)
 {
-    if (start == 0) {
     rl_completion_append_character = ' ';
-        rl_attempted_completion_over = 0;
+    rl_attempted_completion_over = 0;
+    if (start == 0) {
         return rl_completion_matches(text, cmd_name_generator);
     }
-    rl_completion_append_character = '\0';
     StrList words = extract_words(rl_line_buffer);
     for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
         String trigger = registered_completions.items[i];
@@ -728,6 +727,7 @@ char** cmd_name_completion(const char *text, int start, int end)
             rewind(f);
 
             if (sz == 0) {
+                rl_completion_append_character = '\0';
                 fclose(f);
                 printf("\x07");
                 fflush(stdout);
