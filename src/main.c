@@ -602,6 +602,7 @@ int main(int argc, char *argv[])
         for (size_t i = 0; i < CMD_COUNT; i++) {
             if (str_cmp(tokens.items[0].str, builtin_cmds[i])) {
                 matched = i;
+                break;
             }
         }
         // da_foreach(tokens, tok) {
