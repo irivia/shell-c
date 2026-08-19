@@ -36,6 +36,17 @@ typedef struct {
     size_t capacity;
 } TokenList;
 
+bool contains_char(char c, char *chars, size_t n)
+{
+    if (!chars) return false;
+
+    for (size_t i = 0; i < n; i++) {
+        if (c == chars[i]) return true;
+    }
+
+    return false;
+}
+
 String chop_string(String *s);
 
 String chop_word(String *s)
@@ -44,27 +55,31 @@ String chop_word(String *s)
         return STR_NULL;
 
     StringBuilder str = {0};
+    char stoppers[] = {
+        ' ',
+        '\t',
+        '\r',
+        '\n',
+        '>'
+    };
 
-    for (; s->len > 0 && !is_space(*s->data); str_inc(s)) {
+    for (; s->len > 0 && !contains_char(*s->data, stoppers, sizeof(stoppers)); str_inc(s)) {
         if (*s->data == '\\') {
             str_inc(s);
             if (s->len > 0)
                 da_push(str, *s->data);
         }
         else if (*s->data == '\'' || *s->data == '"') {
-            char quote = *s->data;
-            if (expected(s, quote))
+            if (expected(s, *s->data))
                 str_inc(s);
             else {
                 String string = chop_string(s);
                 for (size_t i = 0; i < string.len; i++)
                     da_push(str, string.data[i]);
                 free(string.data);
-                if (is_space(*s->data)) break;
+                if (contains_char(*s->data, stoppers, sizeof(stoppers)))
+                    break;
             }
-        }
-        else if (*s->data == '>') {
-            break;
         }
         else {
             da_push(str, *s->data);
