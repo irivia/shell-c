@@ -157,7 +157,13 @@ static bool expected_str(String *s, const char *exp)
         if (s->data[i] != exp[i]) return false;
     }
 
-    return exp_len == i;
+    if (exp_len == i) {
+        s->data = &s->data[i];
+        s->len -= i;
+        return true;
+    }
+
+    return false;
 }
 
 static String next_str(StrList *list)
