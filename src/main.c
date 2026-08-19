@@ -273,44 +273,45 @@ StrList get_execs_from_path(StrList path_dirs)
     return execs;
 }
 
-int redirect_to(int fd, const char *filename, const char *mode)
+int redirect_to(int from_fd, int to_fd)
 {
-    if (filename == NULL || fd < 0) return -1;
+    if (from_fd < 0 || to_fd < 0) return -1;
 
-    FILE *f;
-    int filed;
-    f = fopen(filename, mode);
-    if (f == NULL) return -1;
-
-    filed = fileno(f);
     int newfd;
-    if (filed == -1 || (newfd = dup2(filed, fd)) == -1) {
-        fclose(f);
+    if ((newfd = dup2(to_fd, from_fd)) == -1) {
         return -1;
     }
-    close(filed);
 
     return newfd;
 }
 
-int redirect_where(Token arg, const char* *mode)
+int redirect_where(TokenList cmd, String *where, const char* *mode)
 {
-    switch (arg.type) {
-    case TOK_WRITE_OUT:
-        *mode = "wb";
-        return STDOUT_FILENO;
-    case TOK_WRITE_ERR:
-        *mode = "wb";
-        return STDERR_FILENO;
-    case TOK_APPEN_OUT:
-        *mode = "ab";
-        return STDOUT_FILENO;
-    case TOK_APPEN_ERR:
-        *mode = "ab";
-        return STDERR_FILENO;
-    default:
-        return -1;
+    // i + 1, because there has to be something after > or >> or whatever
+    for (size_t i = 0; i + 1 < cmd.count; i++) {
+        Token arg = cmd.items[i];
+        switch (arg.type) {
+        case TOK_WRITE_OUT:
+            *mode = "wb";
+            *where = cmd.items[i + 1].str;
+            return STDOUT_FILENO;
+        case TOK_WRITE_ERR:
+            *mode = "wb";
+            *where = cmd.items[i + 1].str;
+            return STDERR_FILENO;
+        case TOK_APPEN_OUT:
+            *mode = "ab";
+            *where = cmd.items[i + 1].str;
+            return STDOUT_FILENO;
+        case TOK_APPEN_ERR:
+            *mode = "ab";
+            *where = cmd.items[i + 1].str;
+            return STDERR_FILENO;
+        default:
+            continue;
+        }
     }
+    return -1;
 }
 
 void command_echo(StrList words)
@@ -402,25 +403,15 @@ void command_complete(StrList args)
     }
 }
 
-void execute_program(const char *path, TokenList args, StrList env)
+void execute_program(const char *path, TokenList args, StrList env, int from_fd, int to_fd)
 {
     if (path == NULL || args.count == 0)
         return;
 
-    int redfd = -1;
-    String redirect = {0};
-    const char *mode;
-
     StrList program_args = {0};
-    for (size_t i = 0; i < args.count; i++) {
+    for (size_t i = 0; i < args.count && args.items[i].type == TOK_WORD; i++) {
         Token arg = args.items[i];
-        redfd = redirect_where(arg, &mode);
-        if (redfd < 0)
-            da_push(program_args, arg.str);
-        if (redfd > 0 && i + 1 < args.count) {
-            redirect = args.items[i + 1].str;
-            break;
-        }
+        da_push(program_args, arg.str);
     }
 
     char* *arguments = (char**)malloc(sizeof(*arguments) * (program_args.count + 1));
@@ -438,13 +429,14 @@ void execute_program(const char *path, TokenList args, StrList env)
     int pid = fork();
     int fd;
     if (pid == 0) {
-        if (redfd > 0 && redirect.len > 0) {
-            fd = redirect_to(redfd, redirect.data, mode);
+        if (from_fd > 0 && to_fd > 0) {
+            fd = redirect_to(from_fd, to_fd);
         }
         execve(path, arguments, env_vars);
     }
     else {
         wait(NULL);
+        free(env_vars);
         free(arguments);
     }
 }
@@ -458,20 +450,21 @@ void execute_command(BuiltIns type, TokenList cmd, StrList path_dirs)
     const char *mode;
 
     StrList program_args = {0};
-    for (size_t i = 1; i < cmd.count; i++) { // we start from 1 because 0 is for the command name
+    // We start from 1 because 0 is for the command name
+    for (size_t i = 1; i < cmd.count && cmd.items[i].type == TOK_WORD; i++) {
         Token arg = cmd.items[i];
-        redfd = redirect_where(arg, &mode);
-        if (redfd < 0)
-            da_push(program_args, arg.str);
-        if (redfd > 0 && i + 1 < cmd.count) {
-            redirect = cmd.items[i + 1].str;
-            break;
-        }
+        da_push(program_args, arg.str);
     }
+    redfd = redirect_where(cmd, &redirect, &mode);
 
     int saved_fd = dup(redfd);
     if (redfd > 0 && redirect.len > 0) {
-        redirect_to(redfd, redirect.data, mode);
+        FILE *f = fopen(redirect.data, mode);
+        if (f) {
+            int fd = fileno(f);
+            redirect_to(redfd, fd);
+            close(fd);
+        }
     }
     switch (type) {
     case CMD_EXIT:
@@ -531,58 +524,43 @@ char** cmd_name_completion(const char *text, int start, int end)
     if (start == 0) {
         return rl_completion_matches(text, cmd_name_generator);
     }
-    StrList words = {0};
+    static char *buffer = NULL;
+    const size_t buffer_sz = 4096;
+    if (!buffer) {
+        buffer = (char*)malloc(buffer_sz);
+    }
+    TokenList words = extract_words(rl_line_buffer);
     for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
-        // String trigger = registered_completions.items[i];
-        // String path = registered_completions.items[i + 1];
-        // if (!str_cmp(trigger, words.items[0])) continue;
-        // fflush(stdout);
-        // StrList args = {0};
-        // da_push(args, to_str(basename(path.data)));
-        // da_push(args, trigger);
-        // for (size_t i = words.count - 1; i > 0; i--) {
-        //     da_push(args, words.items[i]);
-        // }
-        // da_push(args, to_str(">"));
-        // const char *temp_path = "/tmp/my_shell_custom_completion_output";
-        // da_push(args, to_str(temp_path));
-        // StrList envs = {0};
-        // da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
-        // da_push(envs, to_str_fmt("COMP_POINT=%d", end));
-        // execute_program(path.data, args, envs);
-        // da_free(args);
-        // da_free(envs);
-        // FILE *f = fopen(temp_path, "rb");
-        // if (f) {
-        //     fseek(f, 0, SEEK_END);
-        //     long sz = ftell(f);
-        //     rewind(f);
-        //
-        //     if (sz == 0) {
-        //         rl_completion_append_character = '\0';
-        //         fclose(f);
-        //         printf("\x07");
-        //         fflush(stdout);
-        //         break;
-        //     }
-        //
-        //     char *buf = (char*)malloc(sz + 1);
-        //     fread(buf, 1, sz, f);
+        String trigger = registered_completions.items[i];
+        String path = registered_completions.items[i + 1];
+        if (!str_cmp(trigger, words.items[0].str)) continue;
+        TokenList args = {0};
+        Token t = { .str = to_str(basename(path.data)), .type = TOK_WORD };
+        da_push(args, t);
+        t.str = trigger;
+        da_push(args, t);
+        for (size_t i = words.count - 1; i > 0; i--) {
+            t.str = words.items[1].str;
+            da_push(args, t);
+        }
+        StrList envs = {0};
+        da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
+        da_push(envs, to_str_fmt("COMP_POINT=%d", end));
+        FILE *f = fmemopen(buffer, buffer_sz, "r+");
+        int fd = fileno(f);
+        execute_program(path.data, args, envs, STDOUT_FILENO, fd);
+        da_free(args);
+        da_free(envs);
+        close(fd);
+
+        // if (sz == 0) {
+        //     rl_completion_append_character = '\0';
         //     fclose(f);
-        //     if (sz > 0 && buf[sz - 1] == '\n')
-        //         buf[sz - 1] = '\0';
-        //     buf[sz] = '\0';
-        //
-        //     char* *arr = (char**)malloc(sizeof(buf) * 2);
-        //     arr[0] = buf;
-        //     arr[1] = NULL;
-        //
-        //     da_free(words);
-        //     return arr;
-        // }
-        // else {
+        //     printf("\x07");
+        //     fflush(stdout);
         //     break;
         // }
+        break;
     }
 
     da_free(words);
@@ -620,15 +598,25 @@ int main(int argc, char *argv[])
                 break;
             }
         }
-        // da_foreach(tokens, tok) {
-        //     printf("Word: %.*s\n", STR_FMT(tok->str));
-        // }
+        da_foreach(tokens, tok) {
+            printf("Word: %.*s\n", STR_FMT(tok->str));
+        }
         char *program = NULL;
         if (matched != -1) {
             execute_command(matched, tokens, path_dirs);
         }
         else if ((program = search_path(path_dirs, tokens.items[0].str)) != NULL) {
-            execute_program(program, tokens, (StrList){0});
+            String where_to = {0};
+            const char *mode = NULL;
+            int from_fd = redirect_where(tokens, &where_to, &mode);
+            int to_fd = -1;
+            if (from_fd > 0 && where_to.len > 0) {
+                FILE *f = fopen(where_to.data, mode);
+                if (f) to_fd = fileno(f);
+            }
+            execute_program(program, tokens, (StrList){0}, from_fd, to_fd);
+            if (to_fd != -1)
+                close(to_fd);
         }
         else {
             printf("%.*s: command not found\n", STR_FMT(tokens.items[0].str));
