@@ -598,9 +598,9 @@ int main(int argc, char *argv[])
                 break;
             }
         }
-        da_foreach(tokens, tok) {
-            printf("Word: %.*s\n", STR_FMT(tok->str));
-        }
+        // da_foreach(tokens, tok) {
+        //     printf("Word: %.*s\n", STR_FMT(tok->str));
+        // }
         char *program = NULL;
         if (matched != -1) {
             execute_command(matched, tokens, path_dirs);
