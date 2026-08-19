@@ -14,200 +14,8 @@
 #include <libgen.h>
 #include <pwd.h>
 #include <readline/readline.h>
-
-#define da_push(da, data)                                                      \
-    do {                                                                       \
-        if ((da).count >= (da).capacity) {                                     \
-            (da).capacity = (da).capacity > 0 ? (da).capacity * 1.5 : 32;      \
-            (da).items = realloc(da.items, da.capacity * sizeof(*(da).items)); \
-        }                                                                      \
-        (da).items[(da).count] = (data);                                       \
-        (da).count += 1;                                                       \
-    } while (0)
-
-#define da_reserve(da, sz)                                                     \
-    do {                                                                       \
-        (da).capacity = (sz);                                                  \
-        (da).items = realloc((da).items, (da).capacity * sizeof(*(da).items)); \
-    } while (0)
-
-#define da_free(da)        \
-    do {                   \
-        free((da).items);  \
-        (da).items = NULL; \
-        (da).count = 0;    \
-        (da).capacity = 0; \
-    } while (0)
-
-#define da_clear(da)    \
-    do {                \
-        (da).count = 0; \
-    } while (0)
-
-#define da_foreach(da, iter) for (typeof((da).items) iter = (da).items; iter != &(da).items[(da).count]; iter++)
-
-typedef struct {
-    char *data;
-    size_t len;
-} String;
-
-#define STR_FMT(str) (int)(str).len, (str).data
-#define STR_NULL (String){0}
-
-typedef struct {
-    char *items;
-    size_t count;
-    size_t capacity;
-} StringBuilder;
-
-typedef struct {
-    String *items;
-    size_t count;
-    size_t capacity;
-} StrList;
-
-bool is_space(char c)
-{
-    return (
-        c == ' '  ||
-        c == '\n' ||
-        c == '\t' ||
-        c == '\r'
-    );
-}
-
-String to_str(const char *s)
-{
-    if (s == NULL) return STR_NULL;
-
-    return (String) {
-        .data = (char*)s,
-        .len = strlen(s)
-    };
-}
-
-String to_str_fmt(const char *fmt, ...)
-{
-    va_list va;
-    va_start(va, fmt);
-    char *p;
-    int printed = vasprintf(&p, fmt, va);
-    va_end(va);
-
-    if (printed <= 0)
-        return STR_NULL;
-
-    return (String) {
-        .data = p,
-        .len = printed
-    };
-}
-
-bool str_equ(String x, const char *s)
-{
-    return s != NULL && strlen(s) == x.len && memcmp(s, x.data, x.len) == 0;
-}
-
-bool str_cmp(String x, String y)
-{
-    return x.len == y.len && memcmp(x.data, y.data, x.len) == 0;
-}
-
-StrList split_by_delim(char *s, char delim)
-{
-    if (s == NULL) return (StrList){0};
-
-    StrList words = {0};
-    char *cur = s;
-
-    for (;; s++) {
-        if (*s == delim || *s == '\0') {
-            if (s != cur) {
-                String word = { .data = cur, .len = s - cur};
-                da_push(words, word);
-            }
-            if (*s == '\0')
-                break;
-            cur = s + 1;
-        }
-    }
-
-    return words;
-}
-
-void str_inc(String *s)
-{
-    if (s == NULL || s->len == 0) return;
-
-    s->data++;
-    s->len--;
-}
-
-void str_inc_n(String *s, size_t n)
-{
-    if (s == NULL || s->len == 0) return;
-
-    for (size_t i = 0; i < n && s->len > 0; i++) {
-        s->data++;
-        s->len--;
-    }
-}
-
-void trim_left(String *s)
-{
-    if (s == NULL) return;
-
-    for (; s->len > 0 && is_space(*s->data); str_inc(s));
-}
-
-void trim_right(String *s)
-{
-    if (s == NULL) return;
-
-    for (size_t i = s->len - 1; s->len > 0 &&
-        is_space(s->data[i]); i--) s->len--;
-}
-
-bool expected(String *s, char c)
-{
-    return s->len > 1 && s->data[1] == c;
-}
-
-bool expected_off(String *s, char c, size_t offset)
-{
-    return s->len > offset && s->data[offset] == c;
-}
-
-bool expected_str(String *s, const char *exp)
-{
-    if (exp == NULL || s->len == 0) return false;
-
-    size_t exp_len = strlen(exp);
-    size_t i = 0;
-
-    for (; i < exp_len && i < s->len; i++) {
-        if (s->data[i] != exp[i]) return false;
-    }
-
-    return exp_len == i;
-}
-
-String next_str(StrList *list)
-{
-    if (list->count == 0) return STR_NULL;
-
-    list->count--;
-    return *(list->items++);
-}
-
-bool expected_next_str(StrList list, String s)
-{
-    return (
-        list.count > 1 &&
-        list.items[1].len == s.len &&
-        memcmp(list.items[1].data, s.data, s.len) == 0
-    );
-}
+#include "da.h"
+#include "string.h"
 
 String chop_string(String *s);
 
@@ -244,9 +52,7 @@ String chop_word(String *s)
         }
     }
 
-    if (str.count > 0) da_push(str, '\0');
-
-    return (String){ .data = str.items, .len = str.count > 0 ? str.count - 1 : 0 };
+    return sb_to_str(&str);
 }
 
 String chop_string(String *s)
@@ -277,9 +83,8 @@ String chop_string(String *s)
             da_push(str, *s->data);
         }
     }
-    if (str.count > 0) da_push(str, '\0');
 
-    return (String){ .data = str.items, .len = str.count > 0 ? str.count - 1 : 0 };
+    return sb_to_str(&str);
 }
 
 StrList extract_words(char *str)
@@ -301,15 +106,15 @@ StrList extract_words(char *str)
             da_push(words, word);
         }
         else if (expected_str(&s, "1>>") || expected_str(&s, "2>>")) {
-            str_inc_n(&s, 3);
+            strn_inc(&s, 3);
             da_push(words, to_str_fmt("%c>>", c));
         }
         else if (expected_str(&s, "1>") || expected_str(&s, "2>")) {
-            str_inc_n(&s, 2);
+            strn_inc(&s, 2);
             da_push(words, to_str_fmt("%c>", c));
         }
         else if (expected_str(&s, ">>")) {
-            str_inc_n(&s, 2);
+            strn_inc(&s, 2);
             da_push(words, to_str(">>"));
         }
         else if (c == '>') {
@@ -763,8 +568,7 @@ int main(int argc, char *argv[])
         if (words.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
-            if (words.items[0].len == builtin_cmds[i].len &&
-                memcmp(words.items[0].data, builtin_cmds[i].data, builtin_cmds[i].len) == 0) {
+            if (str_cmp(words.items[0], builtin_cmds[i])) {
                 matched = i;
             }
         }
