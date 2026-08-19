@@ -611,14 +611,12 @@ int main(int argc, char *argv[])
         if (matched != -1) {
             execute_command(matched, tokens, path_dirs);
         }
-        else {
-            if ((program = search_path(path_dirs, tokens.items[0].str)) != NULL) {
+        else if ((program = search_path(path_dirs, tokens.items[0].str)) != NULL) {
                 execute_program(program, tokens, (StrList){0});
-            }
-            else {
-                printf("%.*s: command not found\n", STR_FMT(tokens.items[0].str));
-                fflush(stdout);
-            }
+        }
+        else {
+            printf("%.*s: command not found\n", STR_FMT(tokens.items[0].str));
+            fflush(stdout);
         }
         free(line);
         da_free(tokens);
