@@ -596,7 +596,7 @@ char* custom_cmd_generator(const char *text, int state)
 
     while (list_index < completions.count && (name = completions.items[list_index++]).len > 0) {
         String s = to_str(text);
-        if (len <= name.len && strncmp(name.data, text, len))
+        if (len == name.len && strncmp(name.data, text, len))
             return strndup(name.data, name.len);
     }
 
