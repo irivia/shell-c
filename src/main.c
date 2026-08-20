@@ -441,6 +441,34 @@ void execute_program(const char *path, TokenList args, StrList env, int from_fd,
     }
 }
 
+bool run_if_program(TokenList tokens, StrList path_dirs)
+{
+    if (tokens.count == 0) return false;
+
+    char *program = NULL;
+
+    if (access(tokens.items[0].str.data, F_OK) == 0)
+        program = tokens.items[0].str.data;
+    else
+        program = search_path(path_dirs, tokens.items[0].str);
+
+    if (!program) return false;
+
+    String where_to = {0};
+    const char *mode = NULL;
+    int from_fd = redirect_where(tokens, &where_to, &mode);
+    int to_fd = -1;
+    if (from_fd > 0 && where_to.len > 0) {
+        FILE *f = fopen(where_to.data, mode);
+        if (f) to_fd = fileno(f);
+    }
+    execute_program(program, tokens, (StrList){0}, from_fd, to_fd);
+    if (to_fd != -1)
+        close(to_fd);
+
+    return true;
+}
+
 void execute_command(BuiltIns type, TokenList cmd, StrList path_dirs)
 {
     if (cmd.count == 0) return;
@@ -640,20 +668,7 @@ int main(int argc, char *argv[])
         if (matched != -1) {
             execute_command(matched, tokens, path_dirs);
         }
-        else if ((program = search_path(path_dirs, tokens.items[0].str)) != NULL) {
-            String where_to = {0};
-            const char *mode = NULL;
-            int from_fd = redirect_where(tokens, &where_to, &mode);
-            int to_fd = -1;
-            if (from_fd > 0 && where_to.len > 0) {
-                FILE *f = fopen(where_to.data, mode);
-                if (f) to_fd = fileno(f);
-            }
-            execute_program(program, tokens, (StrList){0}, from_fd, to_fd);
-            if (to_fd != -1)
-                close(to_fd);
-        }
-        else {
+        else if (!run_if_program(tokens, path_dirs)) {
             printf("%.*s: command not found\n", STR_FMT(tokens.items[0].str));
             fflush(stdout);
         }
