@@ -6,11 +6,21 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include "da.h"
+
+typedef enum {
+    STR_WORD,
+    STR_WRITE_OUT,
+    STR_APPEN_OUT,
+    STR_WRITE_ERR,
+    STR_APPEN_ERR,
+} StrType;
 
 typedef struct {
     char *data;
     size_t len;
+    StrType type;
 } String;
 
 typedef struct {
@@ -45,7 +55,8 @@ static String sb_to_str(StringBuilder *sb)
     da_push(*sb, '\0');
     return (String) {
         .data = sb->items,
-        .len = sb->count - 1
+        .len = sb->count - 1,
+        .type = STR_WORD
     };
 }
 
@@ -56,6 +67,7 @@ static String to_str(const char *s)
     return (String) {
         .data = (char*)s,
         .len = strlen(s),
+        .type = STR_WORD
     };
 }
 
@@ -73,6 +85,7 @@ static String to_str_fmt(const char *fmt, ...)
     return (String) {
         .data = p,
         .len = (size_t)printed,
+        .type = STR_WORD
     };
 }
 
@@ -115,6 +128,7 @@ static StrList split_by_delim(char *s, char delim)
         if (*s == delim || *s == '\0') {
             if (s != cur) {
                 String word = { .data = cur, .len = s - cur};
+                word.type = STR_WORD;
                 da_push(words, word);
             }
             if (*s == '\0')
@@ -172,4 +186,26 @@ static String next_str(StrList *list)
 
     list->count--;
     return *(list->items++);
+}
+
+static bool strlist_contains(StrList sl, String s)
+{
+    da_foreach(sl, i) {
+        if (str_cmp(*i, s)) return true;
+    }
+
+    return false;
+}
+
+
+static int qsort_str_fun(const void *x, const void *y)
+{
+    if (!x || !y) return 0;
+
+    String str1 = *(String*)x;
+    String str2 = *(String*)y;
+
+    if (str1.len == 0 || str2.len == 0) return 0;
+
+    return str1.data[0] - str2.data[0];
 }
