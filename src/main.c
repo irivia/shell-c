@@ -566,7 +566,7 @@ char* custom_cmd_generator(const char *text, int state)
         da_push(args, trigger);
         da_push(args, to_str(text));
         if (words.count > 1)
-            da_push(args, words.items[words.count - 1]);
+            da_push(args, words.items[words.count - 2]);
         else
             da_push(args, to_str(""));
         int fds[2];
