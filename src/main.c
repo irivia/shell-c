@@ -517,6 +517,18 @@ char* cmd_name_generator(const char *text, int state)
     return NULL;
 }
 
+int sort_str_fun(const void *x, const void *y)
+{
+    if (!x || !y) return 0;
+
+    Token tok1 = *(Token*)x;
+    Token tok2 = *(Token*)y;
+
+    if (tok1.str.len == 0 || tok2.str.len == 0) return 0;
+
+    return tok1.str.data[0] - tok2.str.data[0];
+}
+
 char** cmd_name_completion(const char *text, int start, int end)
 {
     rl_completion_append_character = ' ';
@@ -524,12 +536,11 @@ char** cmd_name_completion(const char *text, int start, int end)
     if (start == 0) {
         return rl_completion_matches(text, cmd_name_generator);
     }
-    static char *buffer = NULL;
-    const size_t buffer_sz = 4096;
-    if (!buffer) {
-        buffer = (char*)malloc(buffer_sz);
-    }
     TokenList words = extract_words(rl_line_buffer);
+    StrList envs = {0};
+    da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
+    da_push(envs, to_str_fmt("COMP_POINT=%d", end));
+    char **arr = NULL;
     for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
         String trigger = registered_completions.items[i];
         String path = registered_completions.items[i + 1];
@@ -539,32 +550,56 @@ char** cmd_name_completion(const char *text, int start, int end)
         da_push(args, t);
         t.str = trigger;
         da_push(args, t);
-        for (size_t i = words.count - 1; i > 0; i--) {
-            t.str = words.items[1].str;
+        if (words.count > 0) {
+            t = words.items[words.count - 1];
             da_push(args, t);
         }
-        StrList envs = {0};
-        da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
-        da_push(envs, to_str_fmt("COMP_POINT=%d", end));
-        FILE *f = fmemopen(buffer, buffer_sz, "r+");
-        int fd = fileno(f);
-        execute_program(path.data, args, envs, STDOUT_FILENO, fd);
+        if (words.count > 1) {
+            t = words.items[words.count - 2];
+            da_push(args, t);
+        }
+        else {
+            t.str = to_str("");
+            da_push(args, t);
+        }
+        int fds[2];
+        if (pipe(fds) == -1) {
+            da_free(args);
+            break;
+        }
+        char buffer[4096];
+        const size_t buff_sz = sizeof(buffer);
+        execute_program(path.data, args, envs, STDOUT_FILENO, fds[1]);
+        close(fds[1]);
+        int bytes_read = read(fds[0], buffer, buff_sz);
+        close(fds[0]);
+        if (bytes_read <= 0) {
+            rl_completion_append_character = '\0';
+            printf("\x07");
+            fflush(stdout);
+            da_free(args);
+            break;
+        }
+        if (bytes_read >= buff_sz) {
+            fprintf(stderr, "Buffer with size: %zu, can't accomodate script output '%.*s'\n",
+                    buff_sz, STR_FMT(path));
+            da_free(args);
+            break;
+        }
+        buffer[bytes_read] = '\0';
+        TokenList completions = extract_words(buffer);
+        qsort(completions.items, completions.count, sizeof(Token), sort_str_fun);
+        arr = (char**)malloc(sizeof(*arr) * (completions.count + 1));
+        for (size_t i = 0; i < completions.count; i++)
+            arr[i] = completions.items[i].str.data;
+        arr[completions.count] = NULL;
         da_free(args);
-        da_free(envs);
-        close(fd);
-
-        // if (sz == 0) {
-        //     rl_completion_append_character = '\0';
-        //     fclose(f);
-        //     printf("\x07");
-        //     fflush(stdout);
-        //     break;
-        // }
         break;
     }
 
     da_free(words);
-    return NULL;
+    da_free(envs);
+    return arr;
 }
 
 int main(int argc, char *argv[])
