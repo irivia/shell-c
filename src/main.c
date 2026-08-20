@@ -565,7 +565,10 @@ char* custom_cmd_generator(const char *text, int state)
         da_push(args, s);
         da_push(args, trigger);
         da_push(args, to_str(text));
-        da_push(args, words.items[words.count - 1]);
+        if (words.count > 1)
+            da_push(args, words.items[words.count - 1]);
+        else
+            da_push(args, to_str(""));
         int fds[2];
         pipe(fds);
         char buffer[4096];
@@ -573,26 +576,26 @@ char* custom_cmd_generator(const char *text, int state)
         execute_program(path.data, args, envs, fds[1], fds[0]);
         da_free(args);
         da_free(envs);
+        da_free(words);
         close(fds[1]);
         ssize_t bytes = read(fds[0], buffer, buffer_sz);
         close(fds[0]);
         if (bytes <= 0) {
-            da_free(words);
+            printf("\x07");
+            fflush(stdout);
             return NULL;
         }
         if (bytes >= buffer_sz) {
             fprintf(stderr, "Buffer of size: %zu couldn't accomodate output from '%s'\n", buffer_sz, path.data);
-            da_free(words);
             return NULL;
         }
         buffer[bytes] = '\0';
-        StrList completions = split_by_delim(buffer, '\n');
+        completions = split_by_delim(buffer, '\n');
         qsort(completions.items, completions.count, sizeof(String), qsort_str_fun);
     }
 
     while (list_index < completions.count && (name = completions.items[list_index++]).len > 0) {
         String s = to_str(text);
-        String cmd = chop_word(&s);
         if (str_equ(name, text))
             return strndup(name.data, name.len);
     }
@@ -602,8 +605,6 @@ char* custom_cmd_generator(const char *text, int state)
 
 char** cmd_name_completion(const char *text, int start, int end)
 {
-    rl_completion_append_character = ' ';
-    rl_attempted_completion_over = 0;
     if (start == 0) {
         return rl_completion_matches(text, cmd_name_generator);
     }
@@ -627,10 +628,19 @@ void my_display_matches(char **matches, int num_matches, int max_length)
     for (int row = 0; row < rows; row++) {
         for (int col = 0; col < columns; col++) {
             int i = row + col * rows;
-
             if (i >= num_matches)
                 continue;
 
+            struct stat st;
+            if (stat(matches[i + 1], &st) == 0 && S_ISDIR(st.st_mode)) {
+                size_t len = strlen(matches[i + 1]);
+                char *match = (char*)malloc(len + 2);
+                match[len] = '/';
+                match[len + 1] = '\0';
+                memcpy(match, matches[i + 1], len);
+                free(matches[i + 1]);
+                matches[i + 1] = match;
+            }
             printf("%-*s", max_length + 2, matches[i + 1]);
         }
         putchar('\n');
@@ -654,10 +664,13 @@ int main(int argc, char *argv[])
     da_push(completion_cmds, STR_NULL);
     da_free(path_execs);
 
+    rl_attempted_completion_function = cmd_name_completion;
+    rl_completion_display_matches_hook = my_display_matches;
+    rl_completion_append_character = ' ';
+    rl_attempted_completion_over = 0;
+
     while (true) {
         char *line;
-        rl_attempted_completion_function = cmd_name_completion;
-        rl_completion_display_matches_hook = my_display_matches;
         line = readline("$ ");
         if (line == NULL)
             continue;

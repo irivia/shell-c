@@ -126,9 +126,8 @@ static StrList split_by_delim(char *s, char delim)
 
     for (;; s++) {
         if (*s == delim || *s == '\0') {
-            if (s != cur) {
-                String word = { .data = cur, .len = s - cur};
-                word.type = STR_WORD;
+            if (s > cur) {
+                String word = to_str_fmt("%.*s", (int)(s - cur), cur);
                 da_push(words, word);
             }
             if (*s == '\0')
