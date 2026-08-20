@@ -518,13 +518,13 @@ StrList completion_cmds = {0};
 char* cmd_name_generator(const char *text, int state)
 {
     static int list_index, len;
-    char *name;
+    String name;
 
     if (!state) {
         list_index = 0;
         len = strlen(text);
     }
-    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++])) {
+    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++]).len > 0) {
         if (strncmp(name.data, text, len) == 0) {
             return strndup(name.data, name.len);
         }
