@@ -524,9 +524,9 @@ char* cmd_name_generator(const char *text, int state)
         list_index = 0;
         len = strlen(text);
     }
-    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++].data)) {
-        if (strncmp(name, text, len) == 0) {
-            return strdup(name);
+    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++])) {
+        if (strncmp(name.data, text, len) == 0) {
+            return strndup(name.data, name.len);
         }
     }
 
