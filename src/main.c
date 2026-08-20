@@ -428,7 +428,10 @@ void execute_program(const char *path, TokenList args, StrList env, int from_fd,
 
     int pid = fork();
     int fd;
-    if (pid == 0) {
+    if (pid == -1) {
+        fprintf(stderr, "Couldn't fork program\n");
+    }
+    else if (pid == 0) {
         if (from_fd > 0 && to_fd > 0) {
             fd = redirect_to(from_fd, to_fd);
         }
@@ -436,9 +439,9 @@ void execute_program(const char *path, TokenList args, StrList env, int from_fd,
     }
     else {
         wait(NULL);
-        free(env_vars);
-        free(arguments);
     }
+    free(env_vars);
+    free(arguments);
 }
 
 bool run_if_program(TokenList tokens, StrList path_dirs)
