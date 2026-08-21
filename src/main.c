@@ -386,6 +386,19 @@ void command_complete(StrList args)
         printf("complete: %.*s: no completion specification\n", STR_FMT(trigger));
         fflush(stdout);
     }
+    else if (str_equ(flag, "-r")) {
+        String trigger = next_str(&args);
+        for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
+            if (str_cmp(trigger, registered_completions.items[i])) {
+                registered_completions.items[i] = registered_completions.items[registered_completions.count - 2];
+                registered_completions.items[i + 1] = registered_completions.items[registered_completions.count - 1];
+                registered_completions.count -= 1;
+                return;
+            }
+        }
+        printf("complete: %.*s: no completion specification\n", STR_FMT(trigger));
+        fflush(stdout);
+    }
 }
 
 void execute_program(const char *path, StrList args, StrList env, int from_fd, int to_fd)
