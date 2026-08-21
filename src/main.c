@@ -518,15 +518,15 @@ StrList completion_cmds = {0};
 char* cmd_name_generator(const char *text, int state)
 {
     static int list_index, len;
-    String name;
+    char *name;
 
     if (!state) {
         list_index = 0;
         len = strlen(text);
     }
-    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++]).len > 0) {
-        if (strncmp(name.data, text, len) == 0) {
-            return strndup(name.data, name.len);
+    while (list_index < completion_cmds.count && (name = completion_cmds.items[list_index++].data)) {
+        if (strncmp(name, text, len) == 0) {
+            return strdup(name);
         }
     }
 
@@ -573,7 +573,7 @@ char* custom_cmd_generator(const char *text, int state)
         pipe(fds);
         char buffer[4096];
         const size_t buffer_sz = sizeof(buffer);
-        execute_program(path.data, args, envs, fds[1], fds[0]);
+        execute_program(path.data, args, envs, STDOUT_FILENO, fds[1]);
         da_free(args);
         da_free(envs);
         da_free(words);
@@ -595,7 +595,6 @@ char* custom_cmd_generator(const char *text, int state)
     }
 
     while (list_index < completions.count && (name = completions.items[list_index++]).len > 0) {
-        String s = to_str(text);
         if (len <= name.len && strncmp(name.data, text, len) == 0)
             return strndup(name.data, name.len);
     }
