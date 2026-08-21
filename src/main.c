@@ -516,6 +516,8 @@ void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
     case CMD_COMPLETE:
         command_complete(program_args);
         break;
+    case CMD_JOBS:
+        break;
     default:
         fprintf(stderr, "Invalid command: %d\n", type);
     }
