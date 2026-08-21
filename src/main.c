@@ -151,6 +151,12 @@ StrList extract_words(const char *str)
             word.type = STR_WRITE_OUT;
             da_push(tokens, word);
         }
+        else if (c == '&') {
+            str_inc(&s);
+            String word = to_str("&");
+            word.type = STR_JOB;
+            da_push(tokens, word);
+        }
         else {
             String word = chop_word(&s);
             if (word.len == 0) continue;
@@ -181,6 +187,9 @@ static String builtin_cmds[CMD_COUNT] = {
     { "complete", 8, STR_WORD },
     { "jobs", 4, STR_WORD },
 };
+
+StrList registered_completions = {0};
+int jobs_count = 0;
 
 bool is_file_executable(const char *file)
 {
@@ -363,8 +372,6 @@ void command_cd(String path)
     }
 }
 
-StrList registered_completions = {0};
-
 void command_complete(StrList args)
 {
     if (args.count < 2) return;
@@ -407,10 +414,12 @@ void execute_program(const char *path, StrList args, StrList env, int from_fd, i
         return;
 
     StrList program_args = {0};
-    for (size_t i = 0; i < args.count && args.items[i].type == STR_WORD; i++) {
-        String arg = args.items[i];
+    String arg = STR_NULL;
+
+    while ((arg = next_str(&args)).len > 0 && arg.type == STR_WORD) {
         da_push(program_args, arg);
     }
+    bool background = arg.type == STR_JOB;
 
     char* *arguments = (char**)malloc(sizeof(*arguments) * (program_args.count + 1));
     for (size_t i = 0; i < program_args.count; i++)
@@ -435,8 +444,13 @@ void execute_program(const char *path, StrList args, StrList env, int from_fd, i
         }
         execve(path, arguments, env_vars);
     }
-    else {
+    else if (!background) {
         wait(NULL);
+    }
+    else {
+        jobs_count++;
+        printf("[%d] %d\n", jobs_count, pid);
+        fflush(stdout);
     }
     free(env_vars);
     free(arguments);

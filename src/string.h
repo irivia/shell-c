@@ -15,6 +15,7 @@ typedef enum {
     STR_APPEN_OUT,
     STR_WRITE_ERR,
     STR_APPEN_ERR,
+    STR_JOB,
 } StrType;
 
 typedef struct {
