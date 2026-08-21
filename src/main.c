@@ -168,16 +168,18 @@ typedef enum {
     CMD_PWD,
     CMD_CD,
     CMD_COMPLETE,
+    CMD_JOBS,
     CMD_COUNT,
 } BuiltIns;
 
 static String builtin_cmds[CMD_COUNT] = {
-    { "exit", 4 },
-    { "echo", 4 },
-    { "type", 4 },
-    { "pwd", 3 },
-    { "cd", 2 },
-    { "complete", 8 },
+    { "exit", 4, STR_WORD },
+    { "echo", 4, STR_WORD },
+    { "type", 4, STR_WORD },
+    { "pwd", 3, STR_WORD },
+    { "cd", 2, STR_WORD },
+    { "complete", 8, STR_WORD },
+    { "jobs", 4, STR_WORD },
 };
 
 bool is_file_executable(const char *file)
