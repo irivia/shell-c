@@ -47,6 +47,7 @@ typedef struct {
     int pid;
     int idx;
     int fds[2];
+    char **cmd;
     StringBuilder buffer;
 } Job;
 
@@ -66,6 +67,14 @@ Job jobs_dequeue(JobList *list)
     list->count -= 1;
 
     return job;
+}
+
+void job_free(Job *job)
+{
+    if (!job) return;
+
+    da_free(job->buffer);
+    free_cstrlist(&job->cmd);
 }
 
 TokenList registered_completions = {0};
@@ -287,6 +296,21 @@ void command_complete(TokenList args)
     }
 }
 
+void command_jobs(TokenList cmd)
+{
+    // [1]+  Running                 sleep 10 &
+    for (size_t i = 0; i < jobs.count; i++) {
+        Job job = jobs.items[i];
+        printf("[%d]+  Running                 ", job.idx);
+        while (*job.cmd != NULL) {
+            printf("%s ", *job.cmd);
+            job.cmd++;
+        }
+        printf("&\n");
+        fflush(stdout);
+    }
+}
+
 void execute_program(const char *path, TokenList args, TokenList env, int from_fd, int to_fd)
 {
     if (path == NULL || args.count == 0)
@@ -322,6 +346,7 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     }
     else if (!background) {
         wait(NULL);
+        free_cstrlist(&arguments);
     }
     else {
         jobs_idx++;
@@ -329,14 +354,12 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
         close(job_fds[1]);
         job.fds[0] = job_fds[0];
         job.fds[1] = job_fds[1];
-        // int flags = fcntl(job.fds[0], F_GETFL, 0);
-        // fcntl(job.fds[0], F_SETFL, flags | O_NONBLOCK);
+        job.cmd = arguments;
         da_push(jobs, job);
         printf("[%d] %d\n", jobs_idx, pid);
         fflush(stdout);
     }
     free_cstrlist(&env_vars);
-    free_cstrlist(&arguments);
 }
 
 bool run_if_program(TokenList tokens, TokenList path_dirs)
@@ -414,6 +437,7 @@ void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
         command_complete(cmd);
         break;
     case CMD_JOBS:
+        command_jobs(cmd);
         break;
     default:
         fprintf(stderr, "Invalid command: %d\n", type);
@@ -582,7 +606,7 @@ void poll_jobs()
             else
                 printf("%s\n", job.buffer.items);
             fflush(stdout);
-            da_free(job.buffer);
+            job_free(&job);
         }
         jobs_idx--;
     }
