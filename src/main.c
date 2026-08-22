@@ -308,12 +308,11 @@ void command_complete(TokenList args)
 void command_jobs(TokenList cmd)
 {
     // [1]+  Running                 sleep 10 &
-    for (ssize_t i = 0; i < jobs.count; i++) {
+    for (ssize_t i = jobs_get_first(&jobs); i < jobs.count; i++) {
         Job job = jobs.items[i];
         char marker = ' ';
-        ssize_t first = jobs_get_first(&jobs);
-        if (first == i) marker = '+';
-        else if (first - 1 == i) marker = '-';
+        if (job.idx == 1) marker = '+';
+        else if (job.idx == 2) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
