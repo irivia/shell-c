@@ -309,14 +309,9 @@ void command_jobs(TokenList cmd)
 {
     // [1]+  Running                 sleep 10 &
     Job list[jobs.count];
-    size_t j = 0;
     const ssize_t first = jobs_get_first(&jobs);
     for (ssize_t i = first; i < jobs.count; i++) {
         Job job = jobs.items[i];
-        if (job.idx == j + 1) list[j++] = job;
-    }
-    for (size_t i = 0; i < j; i++) {
-        Job job = list[i];
         char marker = ' ';
         if (i == jobs.count - 1) marker = '+';
         else if (i == jobs.count - 2) marker = '-';
