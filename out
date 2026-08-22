@@ -1,0 +1,13 @@
+CMakeLists.txt
+README.md
+build
+codecrafters.yml
+compile_flags.txt
+install.sh
+main
+out
+s.py
+src
+vcpkg-configuration.json
+vcpkg.json
+your_program.sh
