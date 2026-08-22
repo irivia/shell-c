@@ -310,15 +310,16 @@ void command_jobs(TokenList cmd)
     // [1]+  Running                 sleep 10 &
     Job list[jobs.count];
     size_t j = 0;
-    for (ssize_t i = jobs_get_first(&jobs); i < jobs.count; i++) {
+    const ssize_t first = jobs_get_first(&jobs);
+    for (ssize_t i = first; i < jobs.count; i++) {
         Job job = jobs.items[i];
         if (job.idx == j + 1) list[j++] = job;
     }
-    for (ssize_t i = j - 1; i >= 0; i--) {
+    for (size_t i = 0; i < j; i++) {
         Job job = list[i];
         char marker = ' ';
-        if (i == j - 1) marker = '+';
-        else if (i == j - 2) marker = '-';
+        if (i == first) marker = '+';
+        else if (i == first + 1) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
