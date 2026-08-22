@@ -1,5 +1,6 @@
 #include <linux/limits.h>
 #include <readline/chardefs.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -67,6 +68,14 @@ Job jobs_dequeue(JobList *list)
     list->count -= 1;
 
     return job;
+}
+
+ssize_t jobs_get_first(JobList *list)
+{
+    if (!list || !list->count) return -1;
+
+    ssize_t ptr = list->ptr % list->count;
+    return ptr;
 }
 
 void job_free(Job *job)
@@ -299,9 +308,13 @@ void command_complete(TokenList args)
 void command_jobs(TokenList cmd)
 {
     // [1]+  Running                 sleep 10 &
-    for (size_t i = 0; i < jobs.count; i++) {
+    for (ssize_t i = 0; i < jobs.count; i++) {
         Job job = jobs.items[i];
-        printf("[%d]+  Running                 ", job.idx);
+        char marker = ' ';
+        ssize_t first = jobs_get_first(&jobs);
+        if (first == i) marker = '+';
+        else if (first + 1 == i) marker = '-';
+        printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
             job.cmd++;
