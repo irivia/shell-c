@@ -314,11 +314,11 @@ void command_jobs(TokenList cmd)
         Job job = jobs.items[i];
         if (job.idx == j + 1) list[j++] = job;
     }
-    for (size_t i = 0; i < j; i++) {
+    for (ssize_t i = j - 1; i >= 0; i--) {
         Job job = list[i];
         char marker = ' ';
-        if (job.idx == 1) marker = '+';
-        else if (job.idx == 2) marker = '-';
+        if (i == j - 1) marker = '+';
+        else if (i == j - 2) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
