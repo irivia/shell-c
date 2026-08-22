@@ -313,7 +313,7 @@ void command_jobs(TokenList cmd)
         char marker = ' ';
         ssize_t first = jobs_get_first(&jobs);
         if (first == i) marker = '+';
-        else if (first + 1 == i) marker = '-';
+        else if (first - 1 == i) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
