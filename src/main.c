@@ -54,7 +54,19 @@ typedef struct {
     Job *items;
     size_t count;
     size_t capacity;
+    size_t ptr;
 } JobList;
+
+Job jobs_dequeue(JobList *list)
+{
+    if (!list || !list->count) return (Job){0};
+
+    list->ptr %= list->count;
+    Job job = list->items[list->ptr++];
+    list->count -= 1;
+
+    return job;
+}
 
 TokenList registered_completions = {0};
 JobList jobs = {0};
@@ -546,11 +558,35 @@ void my_display_matches(char **matches, int num_matches, int max_length)
     }
 }
 
-typedef struct {
-    char* *items;
-    size_t count;
-    size_t capacity;
-} StringList;
+void poll_jobs()
+{
+    if (!jobs.count) return;
+
+    Job job = jobs_dequeue(&jobs);
+    struct pollfd fds = {0};
+    fds.fd = job.fds[0];
+    fds.events = POLLIN;
+    int ret = poll(&fds, 1, 50);
+    if (ret > 0) {
+        char buffer[4096];
+        const size_t buffer_sz = sizeof(buffer);
+        ssize_t bytes = read(job.fds[0], buffer, buffer_sz);
+        close(job.fds[0]);
+        for (ssize_t i = 0; i < bytes; i++) {
+            da_push(job.buffer, buffer[i]);
+        }
+        if (job.buffer.count) {
+            da_push(job.buffer, '\0');
+            printf("%s\n", job.buffer.items);
+            fflush(stdout);
+            da_free(job.buffer);
+        }
+        jobs_idx--;
+    }
+    else if (ret == 0) {
+        da_push(jobs, job);
+    }
+}
 
 int main(int argc, char *argv[])
 {
@@ -574,19 +610,13 @@ int main(int argc, char *argv[])
     rl_attempted_completion_over = 0;
 
     while (true) {
-        if (jobs.count > 0) {
-            Job job = *jobs.items;
-            char buffer[4096];
-            const size_t buffer_sz = sizeof(buffer);
-            ssize_t bytes = read(job.fds[0], buffer, buffer_sz);
-            for (ssize_t i = 0; i < bytes; i++) {
-                da_push(job.buffer, buffer[i]);
-            }
-            printf("%s\n", buffer);
-            fflush(stdout);
-            jobs_idx--;
-        }
+        poll_jobs();
         char *line;
+        struct pollfd fd = {
+            .fd = STDIN_FILENO,
+            .events = POLLIN
+        };
+        poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
             continue;
