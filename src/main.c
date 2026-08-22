@@ -318,8 +318,8 @@ void command_jobs(TokenList cmd)
     for (size_t i = 0; i < j; i++) {
         Job job = list[i];
         char marker = ' ';
-        if (i == first) marker = '+';
-        else if (i == first + 1) marker = '-';
+        if (i == jobs.count - 1) marker = '+';
+        else if (i == jobs.count - 1) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
         while (*job.cmd != NULL) {
             printf("%s ", *job.cmd);
