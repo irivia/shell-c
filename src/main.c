@@ -6,14 +6,19 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <dirent.h>
+#include <sys/poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <time.h>
 #include <unistd.h>
 #include <stdarg.h>
 #include <libgen.h>
 #include <pwd.h>
 #include <readline/readline.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <pthread.h>
 #include "da.h"
 #include "lexer.h"
 
@@ -38,8 +43,22 @@ static Token builtin_cmds[CMD_COUNT] = {
     { "jobs", 4, TOK_WORD },
 };
 
+typedef struct {
+    int pid;
+    int idx;
+    int fds[2];
+    StringBuilder buffer;
+} Job;
+
+typedef struct {
+    Job *items;
+    size_t count;
+    size_t capacity;
+} JobList;
+
 TokenList registered_completions = {0};
-int jobs_count = 0;
+JobList jobs = {0};
+int jobs_idx = 0;
 
 bool is_file_executable(const char *file)
 {
@@ -271,14 +290,21 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     char **arguments = toklist_to_cstrlist(args, args_count);
     char **env_vars = toklist_to_cstrlist(env, env.count);
 
+    int job_fds[2];
+    if (background) pipe(job_fds);
+
     int pid = fork();
-    int fd;
     if (pid == -1) {
         fprintf(stderr, "Couldn't fork program\n");
     }
     else if (pid == 0) {
         if (from_fd > 0 && to_fd > 0) {
-            fd = redirect_to(from_fd, to_fd);
+            redirect_to(from_fd, to_fd);
+        }
+        else if (background) {
+            close(job_fds[0]);
+            redirect_to(STDOUT_FILENO, job_fds[1]);
+            redirect_to(STDERR_FILENO, job_fds[1]);
         }
         execve(path, arguments, env_vars);
     }
@@ -286,8 +312,15 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
         wait(NULL);
     }
     else {
-        jobs_count++;
-        printf("[%d] %d\n", jobs_count, pid);
+        jobs_idx++;
+        Job job = { .idx = jobs_idx, .pid = pid };
+        close(job_fds[1]);
+        job.fds[0] = job_fds[0];
+        job.fds[1] = job_fds[1];
+        int flags = fcntl(job.fds[0], F_GETFL, 0);
+        fcntl(job.fds[0], F_SETFL, flags | O_NONBLOCK);
+        da_push(jobs, job);
+        printf("[%d] %d\n", jobs_idx, pid);
         fflush(stdout);
     }
     free_cstrlist(&env_vars);
@@ -513,19 +546,60 @@ void my_display_matches(char **matches, int num_matches, int max_length)
     }
 }
 
+typedef struct {
+    char* *items;
+    size_t count;
+    size_t capacity;
+} StringList;
+
+pthread_mutex_t lock;
+
+void* update_jobs(void *x)
+{
+    while (true) {
+        struct timespec t;
+        t.tv_nsec = 16 * 1000000;
+        nanosleep(&t, NULL);
+        pthread_mutex_lock(&lock);
+        for (size_t i = 0; i < jobs.count;) {
+            Job job = jobs.items[i];
+            char buffer[4096];
+            const size_t buffer_sz = sizeof(buffer);
+            ssize_t bytes = read(job.fds[0], buffer, buffer_sz);
+            for (ssize_t j = 0; j < bytes; j++)
+                da_push(job.buffer, buffer[j]);
+
+            if (waitpid(job.pid, NULL, WNOHANG) == job.pid) {
+                jobs_idx--;
+                close(job.fds[0]);
+                da_remove(jobs, i);
+                da_push(job.buffer, '\0');
+                printf("%s\n", job.buffer.items);
+                fflush(stdout);
+                da_free(job.buffer);
+                continue;
+            }
+
+            i++;
+        }
+        pthread_mutex_unlock(&lock);
+    }
+}
+
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
     char* path = getenv("PATH");
     TokenList path_dirs = {0};
+    #include <fcntl.h>
     if (path != NULL) {
         path_dirs = split_by_delim(path, ':');
     }
     TokenList path_execs = get_execs_from_path(path_dirs);
     for (size_t i = 0; i < CMD_COUNT; i++)
         da_push(completion_cmds, builtin_cmds[i]);
-    for (size_t i = 0; i < path_execs.count; i++)
-        da_push(completion_cmds, path_execs.items[i]);
+    // for (size_t i = 0; i < path_execs.count; i++)
+    //     da_push(completion_cmds, path_execs.items[i]);
     da_push(completion_cmds, TOK_NULL);
     da_free(path_execs);
 
@@ -534,9 +608,15 @@ int main(int argc, char *argv[])
     rl_completion_append_character = ' ';
     rl_attempted_completion_over = 0;
 
+    pthread_t thread;
+    pthread_create(&thread, NULL, update_jobs, NULL);
+    pthread_detach(thread);
+
     while (true) {
         char *line;
+        pthread_mutex_lock(&lock);
         line = readline("$ ");
+        pthread_mutex_unlock(&lock);
         if (line == NULL)
             continue;
         TokenList tokens = extract_words((char*)line);

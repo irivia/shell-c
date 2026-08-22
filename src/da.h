@@ -28,3 +28,11 @@
     } while (0)
 
 #define da_foreach(da, iter) for (typeof((da).items) iter = (da).items; iter != &(da).items[(da).count]; iter++)
+
+#define da_remove(da, i)                            \
+    do {                                            \
+        if ((i) >= (da).count) break;               \
+        (da).items[i] = (da).items[(da).count - 1]; \
+        (da).count -= 1;                            \
+    } while (0)
+
