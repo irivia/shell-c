@@ -15,157 +15,7 @@
 #include <pwd.h>
 #include <readline/readline.h>
 #include "da.h"
-#include "string.h"
-
-bool contains_char(char c, char *chars, size_t n)
-{
-    if (!chars) return false;
-
-    for (size_t i = 0; i < n; i++) {
-        if (c == chars[i]) return true;
-    }
-
-    return false;
-}
-
-String chop_string(String *s);
-
-String chop_word(String *s)
-{
-    if (s == NULL || s->len == 0)
-        return STR_NULL;
-
-    StringBuilder str = {0};
-    char stoppers[] = {
-        ' ',
-        '\t',
-        '\r',
-        '\n',
-        '>'
-    };
-
-    for (; s->len > 0 && !contains_char(*s->data, stoppers, sizeof(stoppers)); str_inc(s)) {
-        if (*s->data == '\\') {
-            str_inc(s);
-            if (s->len > 0)
-                da_push(str, *s->data);
-        }
-        else if (*s->data == '\'' || *s->data == '"') {
-            if (expected(s, *s->data))
-                str_inc(s);
-            else {
-                String string = chop_string(s);
-                for (size_t i = 0; i < string.len; i++)
-                    da_push(str, string.data[i]);
-                free(string.data);
-                if (contains_char(*s->data, stoppers, sizeof(stoppers)))
-                    break;
-            }
-        }
-        else {
-            da_push(str, *s->data);
-        }
-    }
-
-    return sb_to_str(&str);
-}
-
-String chop_string(String *s)
-{
-    if (s == NULL || s->len == 0 || (*s->data != '\'' && *s->data != '"'))
-        return STR_NULL;
-
-    StringBuilder str = {0};
-    char quote = *s->data;
-    str_inc(s);
-
-    for (; s->len > 0; str_inc(s)) {
-        if (*s->data == quote) {
-            if (expected(s, quote)) {
-                str_inc(s);
-            }
-            else if (s->len > 1 && is_space(s->data[1])) {
-                str_inc(s);
-                break;
-            }
-        }
-        else if (*s->data == '\\' && quote == '"') {
-            str_inc(s);
-            if (s->len > 0)
-                da_push(str, *s->data);
-        }
-        else {
-            da_push(str, *s->data);
-        }
-    }
-
-    return sb_to_str(&str);
-}
-
-StrList extract_words(const char *str)
-{
-    if (str == NULL)
-        return (StrList){0};
-
-    StrList tokens = {0};
-
-    String s = to_str(str);
-    trim_right(&s);
-
-    while (s.len > 0) {
-        trim_left(&s);
-        char c = *s.data;
-        if (c == '\'' || c == '"') {
-            String word = chop_string(&s);
-            if (word.len == 0) continue;
-            da_push(tokens, word);
-        }
-        else if (expected_str(&s, "1>>")) {
-            String word = to_str("1>>");
-            word.type = STR_APPEN_OUT;
-            da_push(tokens, word);
-        }
-        else if (expected_str(&s, "2>>")) {
-            String word = to_str("2>>");
-            word.type = STR_APPEN_ERR;
-            da_push(tokens, word);
-        }
-        else if (expected_str(&s, "1>")) {
-            String word = to_str("1>");
-            word.type = STR_WRITE_OUT;
-            da_push(tokens, word);
-        }
-        else if (expected_str(&s, "2>")) {
-            String word = to_str("2>");
-            word.type = STR_WRITE_ERR;
-            da_push(tokens, word);
-        }
-        else if (expected_str(&s, ">>")) {
-            String word = to_str(">>");
-            word.type = STR_APPEN_OUT;
-            da_push(tokens, word);
-        }
-        else if (c == '>') {
-            str_inc(&s);
-            String word = to_str(">");
-            word.type = STR_WRITE_OUT;
-            da_push(tokens, word);
-        }
-        else if (c == '&') {
-            str_inc(&s);
-            String word = to_str("&");
-            word.type = STR_JOB;
-            da_push(tokens, word);
-        }
-        else {
-            String word = chop_word(&s);
-            if (word.len == 0) continue;
-            da_push(tokens, word);
-        }
-    }
-
-    return tokens;
-}
+#include "lexer.h"
 
 typedef enum {
     CMD_EXIT,
@@ -178,17 +28,17 @@ typedef enum {
     CMD_COUNT,
 } BuiltIns;
 
-static String builtin_cmds[CMD_COUNT] = {
-    { "exit", 4, STR_WORD },
-    { "echo", 4, STR_WORD },
-    { "type", 4, STR_WORD },
-    { "pwd", 3, STR_WORD },
-    { "cd", 2, STR_WORD },
-    { "complete", 8, STR_WORD },
-    { "jobs", 4, STR_WORD },
+static Token builtin_cmds[CMD_COUNT] = {
+    { "exit", 4, TOK_WORD },
+    { "echo", 4, TOK_WORD },
+    { "type", 4, TOK_WORD },
+    { "pwd", 3, TOK_WORD },
+    { "cd", 2, TOK_WORD },
+    { "complete", 8, TOK_WORD },
+    { "jobs", 4, TOK_WORD },
 };
 
-StrList registered_completions = {0};
+TokenList registered_completions = {0};
 int jobs_count = 0;
 
 bool is_file_executable(const char *file)
@@ -201,7 +51,7 @@ bool is_file_executable(const char *file)
     );
 }
 
-char* search_path(const StrList path_dirs, const String cmd)
+char* search_path(const TokenList path_dirs, const Token cmd)
 {
     if (path_dirs.count == 0 || cmd.data == NULL || cmd.len == 0)
         return NULL;
@@ -209,7 +59,7 @@ char* search_path(const StrList path_dirs, const String cmd)
     struct dirent *ent;
     char temp_buf[PATH_MAX];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        snprintf(temp_buf, sizeof(temp_buf), "%.*s", STR_FMT(path_dirs.items[i]));
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", TOK_FMT(path_dirs.items[i]));
         if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
@@ -220,7 +70,7 @@ char* search_path(const StrList path_dirs, const String cmd)
             char *real_path = (char*)malloc(real_path_sz);
             if (real_path == NULL)
                 continue; 
-            if (snprintf(real_path, real_path_sz, "%.*s/%s", STR_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
+            if (snprintf(real_path, real_path_sz, "%.*s/%s", TOK_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
                 free(real_path);
                 continue;
             }
@@ -238,28 +88,26 @@ char* search_path(const StrList path_dirs, const String cmd)
     return NULL;
 }
 
-StrList get_execs_from_path(StrList path_dirs)
+TokenList get_execs_from_path(TokenList path_dirs)
 {
-    StrList execs = {0};
+    TokenList execs = {0};
     if (path_dirs.count == 0)
         return execs;
     DIR *dir;
     struct dirent *ent;
     char temp_buf[PATH_MAX];
     for (size_t i = 0; i < path_dirs.count; i++) {
-        snprintf(temp_buf, sizeof(temp_buf), "%.*s", STR_FMT(path_dirs.items[i]));
+        snprintf(temp_buf, sizeof(temp_buf), "%.*s", TOK_FMT(path_dirs.items[i]));
         if ((dir = opendir(temp_buf)) == NULL)
             continue;
         while ((ent = readdir(dir)) != NULL) {
             const size_t ent_len = strlen(ent->d_name);
             const size_t real_path_sz = path_dirs.items[i].len + ent_len + 2; // one for '/' and one for null terminator
-            if (snprintf(temp_buf, sizeof(temp_buf), "%.*s/%s", STR_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
+            if (snprintf(temp_buf, sizeof(temp_buf), "%.*s/%s", TOK_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
                 continue;
             }
             if (is_file_executable(temp_buf)) {
-                String s;
-                s.data = strndup(ent->d_name, ent_len);
-                s.len = ent_len;
+                Token s = cstr_to_tok(ent->d_name);
                 da_push(execs, s);
             }
         }
@@ -281,25 +129,25 @@ int redirect_to(int from_fd, int to_fd)
     return newfd;
 }
 
-int redirect_where(StrList cmd, String *where, const char* *mode)
+int redirect_where(TokenList cmd, Token *where, const char* *mode)
 {
     // i + 1, because there has to be something after > or >> or whatever
     for (size_t i = 0; i + 1 < cmd.count; i++) {
-        String arg = cmd.items[i];
+        Token arg = cmd.items[i];
         switch (arg.type) {
-        case STR_WRITE_OUT:
+        case TOK_WRITE_OUT:
             *mode = "wb";
             *where = cmd.items[i + 1];
             return STDOUT_FILENO;
-        case STR_WRITE_ERR:
+        case TOK_WRITE_ERR:
             *mode = "wb";
             *where = cmd.items[i + 1];
             return STDERR_FILENO;
-        case STR_APPEN_OUT:
+        case TOK_APPEN_OUT:
             *mode = "ab";
             *where = cmd.items[i + 1];
             return STDOUT_FILENO;
-        case STR_APPEN_ERR:
+        case TOK_APPEN_ERR:
             *mode = "ab";
             *where = cmd.items[i + 1];
             return STDERR_FILENO;
@@ -310,10 +158,10 @@ int redirect_where(StrList cmd, String *where, const char* *mode)
     return -1;
 }
 
-void command_echo(StrList words)
+void command_echo(TokenList words)
 {
     for (size_t i = 0; i < words.count; i++) {
-        printf("%.*s", STR_FMT(words.items[i]));
+        printf("%.*s", TOK_FMT(words.items[i]));
         if (i < words.count - 1)
             printf(" ");
     }
@@ -321,7 +169,7 @@ void command_echo(StrList words)
     fflush(stdout);
 }
 
-void command_type(StrList path_dirs, StrList words)
+void command_type(TokenList path_dirs, TokenList words)
 {
     if (words.count < 1) {
         printf("No command was provided.\n");
@@ -331,18 +179,18 @@ void command_type(StrList path_dirs, StrList words)
     int matched = -1;
     const char *buf;
     for (size_t i = 0; i < CMD_COUNT; i++) {
-        if (str_cmp(words.items[0], builtin_cmds[i])) {
+        if (tok_cmp(words.items[0], builtin_cmds[i])) {
             matched = i;
         }
     }
     if (matched != -1) {
-        printf("%.*s is a shell builtin\n", STR_FMT(words.items[0]));
+        printf("%.*s is a shell builtin\n", TOK_FMT(words.items[0]));
     }
     else if ((buf = search_path(path_dirs, words.items[0])) != NULL) {
-        printf("%.*s is %s\n", STR_FMT(words.items[0]), buf);
+        printf("%.*s is %s\n", TOK_FMT(words.items[0]), buf);
     }
     else {
-        printf("%.*s: not found\n", STR_FMT(words.items[0]));
+        printf("%.*s: not found\n", TOK_FMT(words.items[0]));
     }
     fflush(stdout);
 }
@@ -356,7 +204,7 @@ void command_pwd()
     }
 }
 
-void command_cd(String path)
+void command_cd(Token path)
 {
     if (path.len == 0 || (path.len == 1 && path.data[0] == '~')) {
         char *homedir = getenv("HOME");
@@ -372,33 +220,33 @@ void command_cd(String path)
     }
 }
 
-void command_complete(StrList args)
+void command_complete(TokenList args)
 {
     if (args.count < 2) return;
 
-    String flag = next_str(&args);
-    if (str_equ(flag, "-C")) {
-        String path_to_completer = next_str(&args);
-        String trigger = next_str(&args);
-        da_push(registered_completions, trigger);
-        da_push(registered_completions, path_to_completer);
+    Token flag = next_tok(&args);
+    if (tok_equ(flag, "-C")) {
+        Token path_to_completer = next_tok(&args);
+        Token trigger = next_tok(&args);
+        da_push(registered_completions, tok_dup(trigger));
+        da_push(registered_completions, tok_dup(path_to_completer));
     }
-    else if (str_equ(flag, "-p")) {
-        String trigger = next_str(&args);
+    else if (tok_equ(flag, "-p")) {
+        Token trigger = next_tok(&args);
         for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
-            if (str_cmp(trigger, registered_completions.items[i])) {
-                printf("complete -C '%.*s' %.*s\n", STR_FMT(registered_completions.items[i+1]), STR_FMT(trigger));
+            if (tok_cmp(trigger, registered_completions.items[i])) {
+                printf("complete -C '%.*s' %.*s\n", TOK_FMT(registered_completions.items[i+1]), TOK_FMT(trigger));
                 fflush(stdout);
                 return;
             }
         }
-        printf("complete: %.*s: no completion specification\n", STR_FMT(trigger));
+        printf("complete: %.*s: no completion specification\n", TOK_FMT(trigger));
         fflush(stdout);
     }
-    else if (str_equ(flag, "-r")) {
-        String trigger = next_str(&args);
+    else if (tok_equ(flag, "-r")) {
+        Token trigger = next_tok(&args);
         for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
-            if (str_cmp(trigger, registered_completions.items[i])) {
+            if (tok_cmp(trigger, registered_completions.items[i])) {
                 registered_completions.items[i] = registered_completions.items[registered_completions.count - 2];
                 registered_completions.items[i + 1] = registered_completions.items[registered_completions.count - 1];
                 registered_completions.count -= 1;
@@ -408,30 +256,20 @@ void command_complete(StrList args)
     }
 }
 
-void execute_program(const char *path, StrList args, StrList env, int from_fd, int to_fd)
+void execute_program(const char *path, TokenList args, TokenList env, int from_fd, int to_fd)
 {
     if (path == NULL || args.count == 0)
         return;
 
-    StrList program_args = {0};
-    String arg = STR_NULL;
+    size_t args_count = 0;
+    Token arg = TOK_NULL;
 
-    while ((arg = next_str(&args)).len > 0 && arg.type == STR_WORD) {
-        da_push(program_args, arg);
-    }
-    bool background = arg.type == STR_JOB;
+    for (size_t i = 0; i < args.count && args.items[i].type == TOK_WORD; i++)
+        args_count++;
 
-    char* *arguments = (char**)malloc(sizeof(*arguments) * (program_args.count + 1));
-    for (size_t i = 0; i < program_args.count; i++)
-        arguments[i] = program_args.items[i].data;
-    arguments[program_args.count] = NULL;
-    da_free(program_args);
-
-    char* *env_vars = (char**)malloc(sizeof(*env_vars) * (env.count + 1));
-    for (size_t i = 0; i < env.count; i++) {
-        env_vars[i] = env.items[i].data;
-    }
-    env_vars[env.count] = NULL;
+    bool background = args.count > 0 && args.items[args.count - 1].type == TOK_JOB;
+    char **arguments = toklist_to_cstrlist(args, args_count);
+    char **env_vars = toklist_to_cstrlist(env, env.count);
 
     int pid = fork();
     int fd;
@@ -452,11 +290,11 @@ void execute_program(const char *path, StrList args, StrList env, int from_fd, i
         printf("[%d] %d\n", jobs_count, pid);
         fflush(stdout);
     }
-    free(env_vars);
-    free(arguments);
+    free_cstrlist(&env_vars);
+    free_cstrlist(&arguments);
 }
 
-bool run_if_program(StrList tokens, StrList path_dirs)
+bool run_if_program(TokenList tokens, TokenList path_dirs)
 {
     if (tokens.count == 0) return false;
 
@@ -469,7 +307,7 @@ bool run_if_program(StrList tokens, StrList path_dirs)
 
     if (!program) return false;
 
-    String where_to = {0};
+    Token where_to = {0};
     const char *mode = NULL;
     int from_fd = redirect_where(tokens, &where_to, &mode);
     int to_fd = -1;
@@ -477,28 +315,28 @@ bool run_if_program(StrList tokens, StrList path_dirs)
         FILE *f = fopen(where_to.data, mode);
         if (f) to_fd = fileno(f);
     }
-    execute_program(program, tokens, (StrList){0}, from_fd, to_fd);
+    execute_program(program, tokens, (TokenList){0}, from_fd, to_fd);
     if (to_fd != -1)
         close(to_fd);
 
     return true;
 }
 
-void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
+void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
 {
     if (cmd.count == 0) return;
 
     int redfd = -1;
-    String redirect = {0};
+    Token redirect = {0};
     const char *mode;
 
-    StrList program_args = {0};
-    // We start from 1 because 0 is for the command name
-    for (size_t i = 1; i < cmd.count && cmd.items[i].type == STR_WORD; i++) {
-        String arg = cmd.items[i];
-        da_push(program_args, arg);
+    next_tok(&cmd); // Removing the first token (command name)
+    size_t args_count = 0;
+    for (size_t i = 0; i < cmd.count && cmd.items[i].type == TOK_WORD; i++) {
+        args_count++;
     }
     redfd = redirect_where(cmd, &redirect, &mode);
+    cmd.count = args_count;
 
     int saved_fd = dup(redfd);
     if (redfd > 0 && redirect.len > 0) {
@@ -513,22 +351,22 @@ void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
     case CMD_EXIT:
         exit(0);
     case CMD_ECHO:
-        command_echo(program_args);
+        command_echo(cmd);
         break;
     case CMD_TYPE:
-        command_type(path_dirs, program_args);
+        command_type(path_dirs, cmd);
         break;
     case CMD_PWD:
         command_pwd();
         break;
     case CMD_CD:
-        if (cmd.count > 1)
-            command_cd(program_args.items[0]);
+        if (cmd.count > 0)
+            command_cd(cmd.items[0]);
         else
-            command_cd(STR_NULL);
+            command_cd(TOK_NULL);
         break;
     case CMD_COMPLETE:
-        command_complete(program_args);
+        command_complete(cmd);
         break;
     case CMD_JOBS:
         break;
@@ -539,10 +377,9 @@ void execute_command(BuiltIns type, StrList cmd, StrList path_dirs)
         dup2(saved_fd, redfd);
         close(saved_fd);
     }
-    da_free(program_args);
 }
 
-StrList completion_cmds = {0};
+TokenList completion_cmds = {0};
 
 char* cmd_name_generator(const char *text, int state)
 {
@@ -565,47 +402,47 @@ char* cmd_name_generator(const char *text, int state)
 char* custom_cmd_generator(const char *text, int state)
 {
     static int list_index, len;
-    String trigger = {0};
-    String path = {0};
-    static StrList completions = {0};
-    String name = {0};
+    Token trigger = {0};
+    Token path = {0};
+    static TokenList completions = {0};
+    Token name = {0};
 
     if (!state) {
-        da_free(completions);
-        completions = (StrList){0};
+        toklist_free(&completions);
+        completions = (TokenList){0};
         list_index = 0;
         len = strlen(text);
-        StrList words = extract_words(rl_line_buffer);
+        TokenList words = extract_words(rl_line_buffer);
         if (words.count == 0) return NULL;
         for (size_t i = 0; i + 1 < registered_completions.count; i += 2) {
-            String cmd = words.items[0];
-            String temp_trigger = registered_completions.items[i];
+            Token cmd = words.items[0];
+            Token temp_trigger = registered_completions.items[i];
             path = registered_completions.items[i + 1];
-            if (!str_cmp(cmd, temp_trigger)) continue;
+            if (!tok_cmp(cmd, temp_trigger)) continue;
             trigger = temp_trigger;
             break;
         }
         if (trigger.len == 0 || path.len == 0) return NULL;
-        StrList envs = {0};
-        StrList args = {0};
-        da_push(envs, to_str_fmt("COMP_LINE=%s", rl_line_buffer));
-        da_push(envs, to_str_fmt("COMP_POINT=%d", rl_end));
-        String s = to_str(basename(path.data));
+        TokenList envs = {0};
+        TokenList args = {0};
+        da_push(envs, to_tok_fmt("COMP_LINE=%s", rl_line_buffer));
+        da_push(envs, to_tok_fmt("COMP_POINT=%d", rl_end));
+        Token s = cstr_to_tok(basename(path.data));
         da_push(args, s);
-        da_push(args, trigger);
-        da_push(args, to_str(text));
+        da_push(args, tok_dup(trigger));
+        da_push(args, cstr_to_tok(text));
         if (words.count > 1)
-            da_push(args, words.items[words.count - 2]);
+            da_push(args, tok_dup(words.items[words.count - 2]));
         else
-            da_push(args, to_str(""));
+            da_push(args, cstr_to_tok(""));
         int fds[2];
         pipe(fds);
         char buffer[4096];
         const size_t buffer_sz = sizeof(buffer);
         execute_program(path.data, args, envs, STDOUT_FILENO, fds[1]);
-        da_free(args);
-        da_free(envs);
-        da_free(words);
+        toklist_free(&args);
+        toklist_free(&envs);
+        toklist_free(&words);
         close(fds[1]);
         ssize_t bytes = read(fds[0], buffer, buffer_sz);
         close(fds[0]);
@@ -620,7 +457,7 @@ char* custom_cmd_generator(const char *text, int state)
         }
         buffer[bytes] = '\0';
         completions = split_by_delim(buffer, '\n');
-        qsort(completions.items, completions.count, sizeof(String), qsort_str_fun);
+        qsort(completions.items, completions.count, sizeof(Token), qsort_tok_fun);
     }
 
     while (list_index < completions.count && (name = completions.items[list_index++]).len > 0) {
@@ -680,16 +517,16 @@ int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
     char* path = getenv("PATH");
-    StrList path_dirs = {0};
+    TokenList path_dirs = {0};
     if (path != NULL) {
         path_dirs = split_by_delim(path, ':');
     }
-    StrList path_execs = get_execs_from_path(path_dirs);
+    TokenList path_execs = get_execs_from_path(path_dirs);
     for (size_t i = 0; i < CMD_COUNT; i++)
         da_push(completion_cmds, builtin_cmds[i]);
     for (size_t i = 0; i < path_execs.count; i++)
         da_push(completion_cmds, path_execs.items[i]);
-    da_push(completion_cmds, STR_NULL);
+    da_push(completion_cmds, TOK_NULL);
     da_free(path_execs);
 
     rl_attempted_completion_function = cmd_name_completion;
@@ -702,28 +539,25 @@ int main(int argc, char *argv[])
         line = readline("$ ");
         if (line == NULL)
             continue;
-        StrList tokens = extract_words((char*)line);
+        TokenList tokens = extract_words((char*)line);
         if (tokens.count == 0) continue;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
-            if (str_cmp(tokens.items[0], builtin_cmds[i])) {
+            if (tok_cmp(tokens.items[0], builtin_cmds[i])) {
                 matched = i;
                 break;
             }
         }
-        // da_foreach(tokens, tok) {
-        //     printf("Word: %.*s\n", STR_FMT(tok->str));
-        // }
         char *program = NULL;
         if (matched != -1) {
             execute_command(matched, tokens, path_dirs);
         }
         else if (!run_if_program(tokens, path_dirs)) {
-            printf("%.*s: command not found\n", STR_FMT(tokens.items[0]));
+            printf("%.*s: command not found\n", TOK_FMT(tokens.items[0]));
             fflush(stdout);
         }
         free(line);
-        da_free(tokens);
+        toklist_free(&tokens);
     }
 
 
