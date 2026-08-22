@@ -577,7 +577,10 @@ void poll_jobs()
         }
         if (job.buffer.count) {
             da_push(job.buffer, '\0');
-            printf("%s\n", job.buffer.items);
+            if (job.buffer.items[job.buffer.count - 2] == '\n')
+                printf("%s", job.buffer.items);
+            else
+                printf("%s\n", job.buffer.items);
             fflush(stdout);
             da_free(job.buffer);
         }
