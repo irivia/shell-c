@@ -621,11 +621,13 @@ void poll_jobs()
         Job job = jobs.items[i];
         char buffer[4096];
         const size_t buffer_sz = sizeof(buffer);
-        ssize_t bytes = read(job.fds[0], buffer, buffer_sz);
-        close(job.fds[0]);
-        for (ssize_t i = 0; i < bytes; i++) {
-            da_push(job.buffer, buffer[i]);
+        ssize_t bytes;
+        while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
+            for (ssize_t i = 0; i < bytes; i++) {
+                da_push(job.buffer, buffer[i]);
+            }
         }
+        close(job.fds[0]);
         if (job.buffer.count) {
             da_push(job.buffer, '\0');
             if (job.buffer.items[job.buffer.count - 2] == '\n')
@@ -633,8 +635,8 @@ void poll_jobs()
             else
                 printf("%s\n", job.buffer.items);
             fflush(stdout);
-            job_free(&job);
         }
+        job_free(&job);
         da_remove(jobs, i);
         jobs_idx--;
     }
@@ -679,11 +681,11 @@ int main(int argc, char *argv[])
         poll_jobs();
         // print_jobs();
         char *line;
-        struct pollfd fd = {
-            .fd = STDIN_FILENO,
-            .events = POLLIN
-        };
-        poll(&fd, 1, 50);
+        // struct pollfd fd = {
+        //     .fd = STDIN_FILENO,
+        //     .events = POLLIN
+        // };
+        // poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
             continue;
