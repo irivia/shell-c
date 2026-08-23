@@ -63,7 +63,7 @@ Job jobs_dequeue(JobList *list)
 {
     if (!list || !list->count) return (Job){0};
 
-    list->ptr %= list->count;
+    list->ptr = list->ptr >= list->count ? 0 : list->ptr;
     Job job = list->items[list->ptr++];
     list->count -= 1;
 
@@ -308,16 +308,22 @@ void command_complete(TokenList args)
 void command_jobs(TokenList cmd)
 {
     // [1]+  Running                 sleep 10 &
-    Job list[jobs.count];
     const ssize_t first = jobs_get_first(&jobs);
+    if (first < 0) return;
+    Job list[jobs.count - first];
+    size_t list_count = sizeof(list) / sizeof(list[0]);
     for (ssize_t i = first; i < jobs.count; i++) {
         Job job = jobs.items[i];
+        list[job.idx - 1] = job;
+    }
+    for (ssize_t i = 0; i < list_count; i++) {
+        Job job = list[i];
         char marker = ' ';
-        if (i == jobs.count - 1) marker = '+';
-        else if (i == jobs.count - 2) marker = '-';
+        if (i == list_count - 1) marker = '+';
+        else if (i == list_count - 2) marker = '-';
         printf("[%d]%c  Running                 ", job.idx, marker);
-        while (*job.cmd != NULL) {
-            printf("%s ", *job.cmd);
+        while (*(job.cmd) != NULL) {
+            printf("%s ", *(job.cmd));
             job.cmd++;
         }
         printf("&\n");
@@ -600,12 +606,19 @@ void poll_jobs()
 {
     if (!jobs.count) return;
 
-    Job job = jobs_dequeue(&jobs);
-    struct pollfd fds = {0};
-    fds.fd = job.fds[0];
-    fds.events = POLLIN;
-    int ret = poll(&fds, 1, 50);
-    if (ret > 0) {
+    struct pollfd fds[jobs.count];
+    for (size_t i = 0; i < jobs.count; i++) {
+        fds[i].fd = jobs.items[i].fds[0];
+        fds[i].events = POLLIN;
+    }
+    int ret = poll(fds, jobs.count, 50);
+    if (ret <= 0) return;
+    for (size_t i = 0; i < jobs.count;) {
+        if (fds[i].revents != POLLIN) {
+            i++;
+            continue;
+        }
+        Job job = jobs.items[i];
         char buffer[4096];
         const size_t buffer_sz = sizeof(buffer);
         ssize_t bytes = read(job.fds[0], buffer, buffer_sz);
@@ -622,10 +635,22 @@ void poll_jobs()
             fflush(stdout);
             job_free(&job);
         }
+        da_remove(jobs, i);
         jobs_idx--;
     }
-    else if (ret == 0) {
-        da_push(jobs, job);
+}
+
+void print_jobs()
+{
+    da_foreach(jobs, job) {
+        printf("%d [%d] ", job->pid, job->idx);
+        char **cmd = job->cmd;
+        while (*cmd != NULL) {
+            printf("%s ", *cmd);
+            cmd++;
+        }
+        printf("&\n");
+        fflush(stdout);
     }
 }
 
@@ -652,6 +677,7 @@ int main(int argc, char *argv[])
 
     while (true) {
         poll_jobs();
+        // print_jobs();
         char *line;
         struct pollfd fd = {
             .fd = STDIN_FILENO,
