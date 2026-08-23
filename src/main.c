@@ -614,7 +614,7 @@ void poll_jobs()
     int ret = poll(fds, jobs.count, 50);
     if (ret <= 0) return;
     for (size_t i = 0; i < jobs.count;) {
-        if (!(fds[i].revents & POLLIN)) {
+        if (~fds[i].revents & POLLIN) {
             i++;
             continue;
         }
