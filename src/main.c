@@ -681,11 +681,11 @@ int main(int argc, char *argv[])
         poll_jobs();
         // print_jobs();
         char *line;
-        // struct pollfd fd = {
-        //     .fd = STDIN_FILENO,
-        //     .events = POLLIN
-        // };
-        // poll(&fd, 1, 50);
+        struct pollfd fd = {
+            .fd = STDIN_FILENO,
+            .events = POLLIN
+        };
+        poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
             continue;
