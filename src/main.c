@@ -319,11 +319,9 @@ void command_jobs(TokenList cmd)
     for (ssize_t i = 0; i < list_count; i++) {
         Job job = list[i];
         char marker = ' ';
-        bool done = false;
+        bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
         if (i == list_count - 1) marker = '+';
         else if (i == list_count - 2) marker = '-';
-        if (waitpid(job.pid, NULL, WNOHANG) == 0)
-            done = true;
         printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
         while (*(job.cmd) != NULL) {
             printf("%s ", *(job.cmd));
