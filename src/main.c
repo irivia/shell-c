@@ -46,6 +46,7 @@ static Token builtin_cmds[CMD_COUNT] = {
 };
 
 TokenList registered_completions = {0};
+TokenList path_dirs = {0};
 JobList jobs = {0};
 int jobs_idx = 0;
 
@@ -59,7 +60,7 @@ bool is_file_executable(const char *file)
     );
 }
 
-char* search_path(const TokenList path_dirs, const Token cmd)
+char* search_path(const Token cmd)
 {
     if (path_dirs.count == 0 || cmd.data == NULL || cmd.len == 0)
         return NULL;
@@ -96,7 +97,7 @@ char* search_path(const TokenList path_dirs, const Token cmd)
     return NULL;
 }
 
-TokenList get_execs_from_path(TokenList path_dirs)
+TokenList get_execs_from_path()
 {
     TokenList execs = {0};
     if (path_dirs.count == 0)
@@ -175,7 +176,7 @@ void command_echo(TokenList words)
     fflush(stdout);
 }
 
-void command_type(TokenList path_dirs, TokenList words)
+void command_type(TokenList words)
 {
     if (words.count < 1) {
         printf("No command was provided.\n");
@@ -192,7 +193,7 @@ void command_type(TokenList path_dirs, TokenList words)
     if (matched != -1) {
         printf("%.*s is a shell builtin\n", TOK_FMT(words.items[0]));
     }
-    else if ((buf = search_path(path_dirs, words.items[0])) != NULL) {
+    else if ((buf = search_path(words.items[0])) != NULL) {
         printf("%.*s is %s\n", TOK_FMT(words.items[0]), buf);
     }
     else {
@@ -335,23 +336,23 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     free_cstrlist(&env_vars);
 }
 
-const char* get_program(Token token, TokenList path_dirs)
+const char* get_program(Token token)
 {
     if (!token.len) return NULL;
 
     if (access(token.data, X_OK) == 0)
         return strndup(token.data, token.len);
     else
-        return search_path(path_dirs, token);
+        return search_path(token);
 
     return NULL;
 }
 
-bool run_if_program(TokenList tokens, TokenList path_dirs)
+bool run_if_program(TokenList tokens)
 {
     if (tokens.count == 0) return false;
 
-    const char *program = get_program(tokens.items[0], path_dirs);
+    const char *program = get_program(tokens.items[0]);
 
     if (!program) return false;
 
@@ -368,7 +369,7 @@ bool run_if_program(TokenList tokens, TokenList path_dirs)
     return true;
 }
 
-void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
+void execute_command(BuiltIns type, TokenList cmd)
 {
     if (cmd.count == 0) return;
 
@@ -401,7 +402,7 @@ void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
         command_echo(cmd);
         break;
     case CMD_TYPE:
-        command_type(path_dirs, cmd);
+        command_type(cmd);
         break;
     case CMD_PWD:
         command_pwd();
@@ -566,11 +567,10 @@ int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
     char* path = getenv("PATH");
-    TokenList path_dirs = {0};
     if (path != NULL) {
         path_dirs = split_by_delim(path, ':');
     }
-    TokenList path_execs = get_execs_from_path(path_dirs);
+    TokenList path_execs = get_execs_from_path();
     for (size_t i = 0; i < CMD_COUNT; i++)
         da_push(completion_cmds, builtin_cmds[i]);
     for (size_t i = 0; i < path_execs.count; i++)
@@ -607,9 +607,9 @@ int main(int argc, char *argv[])
         }
         char *program = NULL;
         if (matched != -1) {
-            execute_command(matched, tokens, path_dirs);
+            execute_command(matched, tokens);
         }
-        else if (!run_if_program(tokens, path_dirs)) {
+        else if (!run_if_program(tokens)) {
             printf("%.*s: command not found\n", TOK_FMT(tokens.items[0]));
             fflush(stdout);
         }
