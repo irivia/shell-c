@@ -334,7 +334,7 @@ void command_jobs(TokenList cmd)
     // 1 2 3
     for (size_t i = 0; i < jobs.count; i++) {
         Job job = jobs.items[i];
-        if (job.idx >= highest_idx) {
+        if (job.idx > highest_idx) {
             second_highest_idx = highest_idx;
             highest_idx = job.idx;
         }
