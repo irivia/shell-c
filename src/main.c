@@ -323,7 +323,7 @@ void command_jobs(TokenList cmd)
         Job job = jobs.items[i];
         list[job.idx - 1] = job;
     }
-    for (ssize_t i = 0; i < list_count; i++) {
+    for (ssize_t i = 0; i < list_count;) {
         Job job = list[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
@@ -339,6 +339,9 @@ void command_jobs(TokenList cmd)
         if (done) {
             da_remove_item(jobs, job, job_equal);
             job_free(&job);
+        }
+        else {
+            i++;
         }
     }
 }
