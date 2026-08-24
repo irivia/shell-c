@@ -16,6 +16,7 @@ typedef enum {
     TOK_WRITE_ERR,
     TOK_APPEN_ERR,
     TOK_JOB,
+    TOK_PIPE,
 } TokenType;
 
 typedef struct {
@@ -290,7 +291,8 @@ static Token chop_word(Token *s)
         '\r',
         '\n',
         '>',
-        '&'
+        '&',
+        '|'
     };
 
     for (; s->len > 0 && !contains_char(*s->data, stoppers, sizeof(stoppers)); tok_inc(s)) {
@@ -404,6 +406,12 @@ TokenList extract_words(const char *str)
             tok_inc(&s);
             Token word = cstr_to_tok("&");
             word.type = TOK_JOB;
+            da_push(tokens, word);
+        }
+        else if (c == '|') {
+            tok_inc(&s);
+            Token word = cstr_to_tok("|");
+            word.type = TOK_PIPE;
             da_push(tokens, word);
         }
         else {
