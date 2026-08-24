@@ -711,7 +711,6 @@ int main(int argc, char *argv[])
     rl_attempted_completion_over = 0;
 
     while (true) {
-        poll_jobs();
         // print_jobs();
         char *line;
         struct pollfd fd = {
@@ -741,6 +740,7 @@ int main(int argc, char *argv[])
         }
         FREE(line);
         toklist_free(&tokens);
+        poll_jobs();
     }
 
 
