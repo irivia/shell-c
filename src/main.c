@@ -333,8 +333,8 @@ void command_jobs(TokenList cmd)
         Job job = jobs.items[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
-        if (job.idx == jobs_idx - 1) marker = '+';
-        else if (job.idx == jobs_idx - 2) marker = '-';
+        if (job.idx == jobs_idx) marker = '+';
+        else if (job.idx == jobs_idx - 1) marker = '-';
         printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
         for (size_t j = 0; job.cmd[j]; j++) {
             printf("%s ", job.cmd[j]);
