@@ -108,7 +108,7 @@ static void poll_jobs(JobList *jobs, int time_out_ms)
     }
 }
 
-static void update_jobs(JobList *jobs, int *jobs_idx)
+static void reap_jobs(JobList *jobs, int *jobs_idx)
 {
     for (size_t i = 0; i < jobs->count;) {
         Job job = jobs->items[i];

@@ -273,6 +273,7 @@ void command_jobs(TokenList cmd)
         print_job(&jobs, job, done);
         if (done) {
             da_remove(jobs, i);
+            close(job.fds[0]);
             job_free(&job);
             jobs_idx--;
         }
@@ -581,7 +582,6 @@ int main(int argc, char *argv[])
             .events = POLLIN
         };
 
-        poll_jobs(&jobs, 50);
         poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
@@ -605,7 +605,8 @@ int main(int argc, char *argv[])
         }
         FREE(line);
         toklist_free(&tokens);
-        update_jobs(&jobs, &jobs_idx);
+        poll_jobs(&jobs, 50);
+        reap_jobs(&jobs, &jobs_idx);
     }
 
 
