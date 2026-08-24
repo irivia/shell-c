@@ -52,7 +52,7 @@ static bool is_space(char c)
 static void tok_free(Token *t)
 {
     if (!t) return;
-    free(t->data);
+    FREE(t->data);
     *t = TOK_NULL;
 }
 
@@ -121,9 +121,9 @@ void free_cstrlist(char* **list)
 {
     if (!list || !(*list)) return;
     for (char **ptr = *list; *ptr != NULL; ptr++) {
-        free(*ptr);
+        FREE(*ptr);
     }
-    free(*list);
+    FREE(*list);
     *list = NULL;
 }
 

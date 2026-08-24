@@ -49,7 +49,6 @@ typedef struct {
     int idx;
     int fds[2];
     char **cmd;
-    StringBuilder buffer;
 } Job;
 
 typedef struct {
@@ -82,7 +81,6 @@ void job_free(Job *job)
 {
     if (!job) return;
 
-    da_free(job->buffer);
     free_cstrlist(&job->cmd);
 }
 
@@ -125,7 +123,7 @@ char* search_path(const TokenList path_dirs, const Token cmd)
             if (real_path == NULL)
                 continue; 
             if (snprintf(real_path, real_path_sz, "%.*s/%s", TOK_FMT(path_dirs.items[i]), ent->d_name) != real_path_sz - 1) {
-                free(real_path);
+                FREE(real_path);
                 continue;
             }
             if (is_file_executable(real_path)) {
@@ -134,7 +132,7 @@ char* search_path(const TokenList path_dirs, const Token cmd)
                     return real_path;
                 }
             }
-            free(real_path);
+            FREE(real_path);
         }
         closedir(dir);
     }
@@ -624,7 +622,7 @@ void my_display_matches(char **matches, int num_matches, int max_length)
                 match[len] = '/';
                 match[len + 1] = '\0';
                 memcpy(match, matches[i + 1], len);
-                free(matches[i + 1]);
+                FREE(matches[i + 1]);
                 matches[i + 1] = match;
             }
             printf("%-*s", max_length + 2, matches[i + 1]);
@@ -652,22 +650,24 @@ void poll_jobs()
         }
         Job job = jobs.items[i];
         char buffer[4096];
+        StringBuilder str;
         const size_t buffer_sz = sizeof(buffer);
         ssize_t bytes;
         while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
             for (ssize_t i = 0; i < bytes; i++) {
-                da_push(job.buffer, buffer[i]);
+                da_push(str, buffer[i]);
             }
         }
         close(job.fds[0]);
-        if (job.buffer.count) {
-            da_push(job.buffer, '\0');
-            if (job.buffer.items[job.buffer.count - 2] == '\n')
-                printf("%s", job.buffer.items);
+        if (str.count) {
+            da_push(str, '\0');
+            if (str.items[str.count - 2] == '\n')
+                printf("%s", str.items);
             else
-                printf("%s\n", job.buffer.items);
+                printf("%s\n", str.items);
             fflush(stdout);
         }
+        da_free(str);
         // job_free(&job);
         // da_remove(jobs, i);
         // jobs_idx--;
@@ -724,7 +724,7 @@ int main(int argc, char *argv[])
             printf("%.*s: command not found\n", TOK_FMT(tokens.items[0]));
             fflush(stdout);
         }
-        free(line);
+        FREE(line);
         toklist_free(&tokens);
     }
 

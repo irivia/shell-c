@@ -4,6 +4,13 @@
 #include <stddef.h>
 #include <stdlib.h>
 
+#define FREE(p)                   \
+    do {                          \
+        printf("free %p\n", (p)); \
+        fflush(stdout);           \
+        free(p);                  \
+    } while (0)
+
 #define da_push(da, data)                                                          \
     do {                                                                           \
         if ((da).count >= (da).capacity) {                                         \
@@ -16,7 +23,7 @@
 
 #define da_free(da)        \
     do {                   \
-        free((da).items);  \
+        FREE((da).items);  \
         (da).items = NULL; \
         (da).count = 0;    \
         (da).capacity = 0; \
