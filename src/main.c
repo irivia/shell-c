@@ -309,7 +309,6 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     }
     else if (!background) {
         poll_jobs(&jobs, 50);
-        reap_jobs(&jobs, &jobs_idx);
         waitpid(pid, NULL, 0);
         free_cstrlist(&arguments);
     }
