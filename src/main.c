@@ -329,34 +329,25 @@ void command_complete(TokenList args)
 
 void command_jobs(TokenList cmd)
 {
-    // [1]+  Running                 sleep 10 &
-    const ssize_t first = jobs_get_first(&jobs);
-    if (first < 0) return;
-    Job list[jobs.count - first];
-    size_t list_count = sizeof(list) / sizeof(list[0]);
-    for (ssize_t i = first; i < jobs.count; i++) {
+    for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
-        list[job.idx - 1] = job;
-    }
-    for (ssize_t i = 0; i < list_count; i++) {
-        Job job = list[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
-        if (i == list_count - 1) marker = '+';
-        else if (i == list_count - 2) marker = '-';
+        if (job.idx == jobs_idx - 1) marker = '+';
+        else if (job.idx == jobs_idx - 2) marker = '-';
         printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
-        while (*(job.cmd) != NULL) {
-            printf("%s ", *(job.cmd));
-            job.cmd++;
+        for (size_t j = 0; job.cmd[j]; j++) {
+            printf("%s ", job.cmd[j]);
         }
         printf("%s", done ? "\n" : "&\n");
         fflush(stdout);
         if (done) {
-            print_jobs();
-            da_remove_item(jobs, job, job_equal);
-            print_jobs();
+            da_remove(jobs, i);
             job_free(&job);
             jobs_idx--;
+        }
+        else {
+            i++;
         }
     }
 }
@@ -650,7 +641,7 @@ void poll_jobs()
         }
         Job job = jobs.items[i];
         char buffer[4096];
-        StringBuilder str;
+        StringBuilder str = {0};
         const size_t buffer_sz = sizeof(buffer);
         ssize_t bytes;
         while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {

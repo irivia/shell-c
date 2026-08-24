@@ -6,8 +6,8 @@
 
 #define FREE(p)                   \
     do {                          \
-        printf("free %p\n", (p)); \
-        fflush(stdout);           \
+        /*printf("free %p\n", (p));*/ \
+        /*fflush(stdout);          */ \
         free(p);                  \
     } while (0)
 
