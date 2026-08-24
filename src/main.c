@@ -86,11 +86,9 @@ void job_free(Job *job)
     free_cstrlist(&job->cmd);
 }
 
-bool job_equal(void *x, void *y)
+bool job_equal(Job *job1, Job *job2)
 {
-    Job *job1 = (Job*)x;
-    Job *job2 = (Job*)y;
-    return job1 && job2 && job1->pid == job2->pid;
+    return job1 && job2 && job1->pid == job2->pid && job1->idx == job2->idx;
 }
 
 TokenList registered_completions = {0};
@@ -214,6 +212,25 @@ int redirect_where(TokenList cmd, Token *where, const char* *mode)
     return -1;
 }
 
+void print_jobs()
+{
+    if (!jobs.count) {
+        printf("No jobs are currently running!\n");
+        fflush(stdout);
+        return;
+    }
+    da_foreach(jobs, job) {
+        printf("%d [%d] ", job->pid, job->idx);
+        char **cmd = job->cmd;
+        while (*cmd != NULL) {
+            printf("%s ", *cmd);
+            cmd++;
+        }
+        printf("&\n");
+        fflush(stdout);
+    }
+}
+
 void command_echo(TokenList words)
 {
     for (size_t i = 0; i < words.count; i++) {
@@ -323,7 +340,7 @@ void command_jobs(TokenList cmd)
         Job job = jobs.items[i];
         list[job.idx - 1] = job;
     }
-    for (ssize_t i = 0; i < list_count;) {
+    for (ssize_t i = 0; i < list_count; i++) {
         Job job = list[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
@@ -337,11 +354,11 @@ void command_jobs(TokenList cmd)
         printf("%s", done ? "\n" : "&\n");
         fflush(stdout);
         if (done) {
+            print_jobs();
             da_remove_item(jobs, job, job_equal);
+            print_jobs();
             job_free(&job);
-        }
-        else {
-            i++;
+            jobs_idx--;
         }
     }
 }
@@ -653,21 +670,7 @@ void poll_jobs()
         }
         // job_free(&job);
         // da_remove(jobs, i);
-        jobs_idx--;
-    }
-}
-
-void print_jobs()
-{
-    da_foreach(jobs, job) {
-        printf("%d [%d] ", job->pid, job->idx);
-        char **cmd = job->cmd;
-        while (*cmd != NULL) {
-            printf("%s ", *cmd);
-            cmd++;
-        }
-        printf("&\n");
-        fflush(stdout);
+        // jobs_idx--;
     }
 }
 

@@ -101,11 +101,14 @@ static Token cstr_to_tok(const char *s)
 
 char** toklist_to_cstrlist(TokenList tl, size_t n)
 {
-    if (n > tl.count) return NULL;
+    if (n > tl.count)
+        n = tl.count;
 
     char **list = (char**)malloc(sizeof(*list) * (n + 1));
-    if (!list) return NULL;
-
+    if (!list) {
+        fprintf(stderr, "Failed to allocated list of size: %zu\n", n);
+        return NULL;
+    }
     for (size_t i = 0; i < n; i++) {
         list[i] = strndup(tl.items[i].data, tl.items[i].len);
     }
@@ -116,11 +119,18 @@ char** toklist_to_cstrlist(TokenList tl, size_t n)
 
 void free_cstrlist(char* **list)
 {
+    printf("Wtf 1\n");
+    if (!list || !(*list)) return;
+    printf("Wtf 2\n");
     for (char **ptr = *list; *ptr != NULL; ptr++) {
+        printf("Wtf 3\n");
+        printf("str: %s\n", *ptr);
         free(*ptr);
-        *ptr = NULL;
     }
+    printf("Wtf 4\n");
     free(*list);
+    printf("Wtf 5\n");
+    *list = NULL;
 }
 
 static Token to_tok_fmt(const char *fmt, ...)
