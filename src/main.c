@@ -125,18 +125,6 @@ TokenList get_execs_from_path(TokenList path_dirs)
     return execs;
 }
 
-int redirect_to(int from_fd, int to_fd)
-{
-    if (from_fd < 0 || to_fd < 0) return -1;
-
-    int newfd;
-    if ((newfd = dup2(to_fd, from_fd)) == -1) {
-        return -1;
-    }
-
-    return newfd;
-}
-
 int redirect_where(TokenList cmd, Token *where, const char* *mode)
 {
     // i + 1, because there has to be something after > or >> or whatever
@@ -308,17 +296,19 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     }
     else if (pid == 0) {
         if (from_fd > 0 && to_fd > 0) {
-            redirect_to(from_fd, to_fd);
+            dup2(to_fd, from_fd);
+            close(to_fd);
         }
         else if (background) {
             close(job_fds[0]);
-            redirect_to(STDOUT_FILENO, job_fds[1]);
-            redirect_to(STDERR_FILENO, job_fds[1]);
+            dup2(job_fds[1], STDOUT_FILENO);
+            dup2(job_fds[1], STDERR_FILENO);
+            close(job_fds[1]);
         }
         execve(path, arguments, env_vars);
     }
     else if (!background) {
-        wait(NULL);
+        waitpid(pid, NULL, 0);
         free_cstrlist(&arguments);
     }
     else {
@@ -357,8 +347,6 @@ bool run_if_program(TokenList tokens, TokenList path_dirs)
         if (f) to_fd = fileno(f);
     }
     execute_program(program, tokens, (TokenList){0}, from_fd, to_fd);
-    if (to_fd != -1)
-        close(to_fd);
 
     return true;
 }
@@ -380,11 +368,12 @@ void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
     cmd.count = args_count;
 
     int saved_fd = dup(redfd);
+    int fd = -1;
     if (redfd > 0 && redirect.len > 0) {
         FILE *f = fopen(redirect.data, mode);
         if (f) {
             int fd = fileno(f);
-            redirect_to(redfd, fd);
+            dup2(fd, redfd);
             close(fd);
         }
     }
@@ -418,6 +407,7 @@ void execute_command(BuiltIns type, TokenList cmd, TokenList path_dirs)
     if (redfd > 0 && redirect.len > 0) {
         dup2(saved_fd, redfd);
         close(saved_fd);
+        close(fd);
     }
 }
 
