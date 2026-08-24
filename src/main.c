@@ -22,6 +22,7 @@
 #include <poll.h>
 #include "da.h"
 #include "lexer.h"
+#include "jobs.h"
 
 typedef enum {
     CMD_EXIT,
@@ -43,51 +44,6 @@ static Token builtin_cmds[CMD_COUNT] = {
     { "complete", 8, TOK_WORD },
     { "jobs", 4, TOK_WORD },
 };
-
-typedef struct {
-    int pid;
-    int idx;
-    int fds[2];
-    char **cmd;
-} Job;
-
-typedef struct {
-    Job *items;
-    size_t count;
-    size_t capacity;
-    size_t ptr;
-} JobList;
-
-Job jobs_dequeue(JobList *list)
-{
-    if (!list || !list->count) return (Job){0};
-
-    list->ptr = list->ptr >= list->count ? 0 : list->ptr;
-    Job job = list->items[list->ptr++];
-    list->count -= 1;
-
-    return job;
-}
-
-ssize_t jobs_get_first(JobList *list)
-{
-    if (!list || !list->count) return -1;
-
-    ssize_t ptr = list->ptr % list->count;
-    return ptr;
-}
-
-void job_free(Job *job)
-{
-    if (!job) return;
-
-    free_cstrlist(&job->cmd);
-}
-
-bool job_equal(Job *job1, Job *job2)
-{
-    return job1 && job2 && job1->pid == job2->pid && job1->idx == job2->idx;
-}
 
 TokenList registered_completions = {0};
 JobList jobs = {0};
@@ -210,55 +166,6 @@ int redirect_where(TokenList cmd, Token *where, const char* *mode)
     return -1;
 }
 
-void print_jobs()
-{
-    if (!jobs.count) {
-        printf("No jobs are currently running!\n");
-        fflush(stdout);
-        return;
-    }
-    da_foreach(jobs, job) {
-        printf("%d [%d] ", job->pid, job->idx);
-        char **cmd = job->cmd;
-        while (*cmd != NULL) {
-            printf("%s ", *cmd);
-            cmd++;
-        }
-        printf("&\n");
-        fflush(stdout);
-    }
-}
-
-void get_recent_job_idx(size_t *one, size_t *two)
-{
-    *one = 0;
-    *two = 0;
-    for (size_t i = 0; i < jobs.count; i++) {
-        Job job = jobs.items[i];
-        if (job.idx > *one) {
-            *two = *one;
-            *one = job.idx;
-        }
-    }
-}
-
-void print_job(Job job, bool done)
-{
-    size_t highest_idx = 0;
-    size_t second_highest_idx = 0;
-    get_recent_job_idx(&highest_idx, &second_highest_idx);
-    char marker = ' ';
-    if (job.idx == highest_idx)
-        marker = '+';
-    else if (job.idx == second_highest_idx)
-        marker = '-';
-    printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
-    for (size_t j = 0; job.cmd[j]; j++) {
-        printf("%s ", job.cmd[j]);
-    }
-    printf("%s", done ? "\n" : "&\n");
-    fflush(stdout);
-}
 
 void command_echo(TokenList words)
 {
@@ -363,7 +270,7 @@ void command_jobs(TokenList cmd)
     for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
-        print_job(job, done);
+        print_job(&jobs, job, done);
         if (done) {
             da_remove(jobs, i);
             job_free(&job);
@@ -646,52 +553,6 @@ void my_display_matches(char **matches, int num_matches, int max_length)
     }
 }
 
-void poll_jobs()
-{
-    if (!jobs.count) return;
-
-    struct pollfd fds[jobs.count];
-    for (size_t i = 0; i < jobs.count; i++) {
-        fds[i].fd = jobs.items[i].fds[0];
-        fds[i].events = POLLIN;
-    }
-    int ret = poll(fds, jobs.count, 50);
-    for (size_t i = 0; ret > 0 && i < jobs.count; i++) {
-        Job job = jobs.items[i];
-        if (~fds[i].revents & POLLIN) continue;
-        char buffer[4096];
-        StringBuilder str = {0};
-        const size_t buffer_sz = sizeof(buffer);
-        ssize_t bytes;
-        while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
-            for (ssize_t i = 0; i < bytes; i++) {
-                da_push(str, buffer[i]);
-            }
-        }
-        close(job.fds[0]);
-        if (str.count) {
-            da_push(str, '\0');
-            if (str.items[str.count - 2] == '\n')
-                printf("%s", str.items);
-            else
-                printf("%s\n", str.items);
-            fflush(stdout);
-        }
-        da_free(str);
-    }
-    for (size_t i = 0; i < jobs.count;) {
-        Job job = jobs.items[i];
-        if (waitpid(job.pid, NULL, WNOHANG) != 0) {
-            print_job(job, true);
-            da_remove(jobs, i);
-            job_free(&job);
-            jobs_idx--;
-            continue;
-        }
-        i++;
-    }
-}
-
 int main(int argc, char *argv[])
 {
     setbuf(stdout, NULL);
@@ -714,12 +575,13 @@ int main(int argc, char *argv[])
     rl_attempted_completion_over = 0;
 
     while (true) {
-        // print_jobs();
         char *line;
         struct pollfd fd = {
             .fd = STDIN_FILENO,
             .events = POLLIN
         };
+
+        poll_jobs(&jobs, 50);
         poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
@@ -743,7 +605,7 @@ int main(int argc, char *argv[])
         }
         FREE(line);
         toklist_free(&tokens);
-        poll_jobs();
+        update_jobs(&jobs, &jobs_idx);
     }
 
 
