@@ -267,6 +267,7 @@ void command_complete(TokenList args)
 
 void command_jobs(TokenList cmd)
 {
+    poll_jobs(&jobs, 50);
     for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
