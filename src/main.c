@@ -316,7 +316,7 @@ void command_jobs(TokenList cmd)
         Job job = jobs.items[i];
         list[job.idx - 1] = job;
     }
-    for (ssize_t i = 0; i < list_count; i++) {
+    for (ssize_t i = 0; i < list_count;) {
         Job job = list[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
@@ -327,12 +327,14 @@ void command_jobs(TokenList cmd)
             printf("%s ", *(job.cmd));
             job.cmd++;
         }
-        printf("%s", done ? "&\n" : "\n");
+        printf("%s", done ? "\n" : "&\n");
         fflush(stdout);
         if (done) {
             job_free(&job);
             da_remove(jobs, i);
         }
+        else
+            i++;
     }
 }
 
