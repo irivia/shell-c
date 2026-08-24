@@ -154,6 +154,15 @@ int redirect_where(TokenList cmd, Token *where, const char* *mode)
     return -1;
 }
 
+TokenList pipe_where(TokenList cmd)
+{
+    Token tok = {0};
+    while ((tok = next_tok(&cmd)).type != TOK_PIPE);
+
+    next_tok(&cmd);
+
+    return cmd;
+}
 
 void command_echo(TokenList words)
 {
@@ -326,16 +335,23 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     free_cstrlist(&env_vars);
 }
 
+const char* get_program(Token token, TokenList path_dirs)
+{
+    if (!token.len) return NULL;
+
+    if (access(token.data, X_OK) == 0)
+        return strndup(token.data, token.len);
+    else
+        return search_path(path_dirs, token);
+
+    return NULL;
+}
+
 bool run_if_program(TokenList tokens, TokenList path_dirs)
 {
     if (tokens.count == 0) return false;
 
-    char *program = NULL;
-
-    if (access(tokens.items[0].data, F_OK) == 0)
-        program = tokens.items[0].data;
-    else
-        program = search_path(path_dirs, tokens.items[0]);
+    const char *program = get_program(tokens.items[0], path_dirs);
 
     if (!program) return false;
 
