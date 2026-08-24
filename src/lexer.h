@@ -119,17 +119,11 @@ char** toklist_to_cstrlist(TokenList tl, size_t n)
 
 void free_cstrlist(char* **list)
 {
-    printf("Wtf 1\n");
     if (!list || !(*list)) return;
-    printf("Wtf 2\n");
     for (char **ptr = *list; *ptr != NULL; ptr++) {
-        printf("Wtf 3\n");
-        printf("str: %s\n", *ptr);
         free(*ptr);
     }
-    printf("Wtf 4\n");
     free(*list);
-    printf("Wtf 5\n");
     *list = NULL;
 }
 
