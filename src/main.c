@@ -329,6 +329,7 @@ void command_complete(TokenList args)
 
 void command_jobs(TokenList cmd)
 {
+    size_t done_jobs = 0;
     for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
         char marker = ' ';
@@ -344,12 +345,13 @@ void command_jobs(TokenList cmd)
         if (done) {
             da_remove(jobs, i);
             job_free(&job);
-            jobs_idx--;
+            done_jobs++;
         }
         else {
             i++;
         }
     }
+    jobs_idx -= done_jobs;
 }
 
 void execute_program(const char *path, TokenList args, TokenList env, int from_fd, int to_fd)
