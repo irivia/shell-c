@@ -656,36 +656,39 @@ void poll_jobs()
         fds[i].events = POLLIN;
     }
     int ret = poll(fds, jobs.count, 50);
-    for (size_t i = 0; i < jobs.count; i++) {
+    for (size_t i = 0; ret > 0 && i < jobs.count; i++) {
         Job job = jobs.items[i];
-        if (fds[i].revents & POLLIN) {
-            char buffer[4096];
-            StringBuilder str = {0};
-            const size_t buffer_sz = sizeof(buffer);
-            ssize_t bytes;
-            while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
-                for (ssize_t i = 0; i < bytes; i++) {
-                    da_push(str, buffer[i]);
-                }
+        if (~fds[i].revents & POLLIN) continue;
+        char buffer[4096];
+        StringBuilder str = {0};
+        const size_t buffer_sz = sizeof(buffer);
+        ssize_t bytes;
+        while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
+            for (ssize_t i = 0; i < bytes; i++) {
+                da_push(str, buffer[i]);
             }
-            close(job.fds[0]);
-            if (str.count) {
-                da_push(str, '\0');
-                if (str.items[str.count - 2] == '\n')
-                    printf("%s", str.items);
-                else
-                    printf("%s\n", str.items);
-                fflush(stdout);
-            }
-            da_free(str);
         }
+        close(job.fds[0]);
+        if (str.count) {
+            da_push(str, '\0');
+            if (str.items[str.count - 2] == '\n')
+                printf("%s", str.items);
+            else
+                printf("%s\n", str.items);
+            fflush(stdout);
+        }
+        da_free(str);
+    }
+    for (size_t i = 0; i < jobs.count;) {
+        Job job = jobs.items[i];
         if (waitpid(job.pid, NULL, WNOHANG) != 0) {
             print_job(job, true);
-            job_free(&job);
             da_remove(jobs, i);
-            i--;
+            job_free(&job);
             jobs_idx--;
+            continue;
         }
+        i++;
     }
 }
 
