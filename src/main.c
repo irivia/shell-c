@@ -578,6 +578,7 @@ int main(int argc, char *argv[])
 
     while (true) {
         char *line;
+        TokenList tokens = {0};
         struct pollfd fd = {
             .fd = STDIN_FILENO,
             .events = POLLIN
@@ -585,11 +586,11 @@ int main(int argc, char *argv[])
 
         poll(&fd, 1, 50);
         line = readline("$ ");
-        if (line == NULL) {
+        if (line == NULL)
             goto LOOP_CLEANUP;
-        }
-        TokenList tokens = extract_words((char*)line);
-        if (tokens.count == 0) goto LOOP_CLEANUP;
+        tokens = extract_words((char*)line);
+        if (tokens.count == 0)
+            goto LOOP_CLEANUP;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
             if (tok_cmp(tokens.items[0], builtin_cmds[i])) {
