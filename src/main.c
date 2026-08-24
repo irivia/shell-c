@@ -329,13 +329,23 @@ void command_complete(TokenList args)
 
 void command_jobs(TokenList cmd)
 {
-    size_t done_jobs = 0;
+    size_t highest_idx = 0;
+    size_t second_highest_idx = 0;
+    for (size_t i = 0; i < jobs.count; i++) {
+        Job job = jobs.items[i];
+        if (job.idx >= highest_idx)
+            highest_idx = job.idx;
+        else if (job.idx > second_highest_idx)
+            second_highest_idx = job.idx;
+    }
     for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
         char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
-        if (job.idx == jobs_idx) marker = '+';
-        else if (job.idx == jobs_idx - 1) marker = '-';
+        if (job.idx == highest_idx)
+            marker = '+';
+        else if (job.idx == second_highest_idx)
+            marker = '-';
         printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
         for (size_t j = 0; job.cmd[j]; j++) {
             printf("%s ", job.cmd[j]);
@@ -345,13 +355,12 @@ void command_jobs(TokenList cmd)
         if (done) {
             da_remove(jobs, i);
             job_free(&job);
-            done_jobs++;
+            jobs_idx--;
         }
         else {
             i++;
         }
     }
-    jobs_idx -= done_jobs;
 }
 
 void execute_program(const char *path, TokenList args, TokenList env, int from_fd, int to_fd)
