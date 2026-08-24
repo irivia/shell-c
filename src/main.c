@@ -585,10 +585,11 @@ int main(int argc, char *argv[])
 
         poll(&fd, 1, 50);
         line = readline("$ ");
-        if (line == NULL)
-            continue;
+        if (line == NULL) {
+            goto LOOP_CLEANUP;
+        }
         TokenList tokens = extract_words((char*)line);
-        if (tokens.count == 0) continue;
+        if (tokens.count == 0) goto LOOP_CLEANUP;
         int matched = -1;
         for (size_t i = 0; i < CMD_COUNT; i++) {
             if (tok_cmp(tokens.items[0], builtin_cmds[i])) {
@@ -604,6 +605,7 @@ int main(int argc, char *argv[])
             printf("%.*s: command not found\n", TOK_FMT(tokens.items[0]));
             fflush(stdout);
         }
+LOOP_CLEANUP:
         FREE(line);
         toklist_free(&tokens);
         poll_jobs(&jobs, 50);
