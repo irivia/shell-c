@@ -36,3 +36,13 @@
         (da).count -= 1;                            \
     } while (0)
 
+// bool func(void*, void*)
+#define da_remove_item(da, elem, func)            \
+    do {                                          \
+        for (size_t i = 0; i < (da).count; i++) { \
+            if (func(&(elem), &(da).items[i])) {  \
+                da_remove(da, i);                 \
+                break;                            \
+            }                                     \
+        }                                         \
+    } while (0)
