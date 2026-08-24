@@ -576,8 +576,6 @@ int main(int argc, char *argv[])
             .events = POLLIN
         };
 
-        poll_jobs(&jobs, 50);
-        reap_jobs(&jobs, &jobs_idx);
         poll(&fd, 1, 50);
         line = readline("$ ");
         if (line == NULL)
@@ -603,6 +601,8 @@ int main(int argc, char *argv[])
 LOOP_CLEANUP:
         FREE(line);
         toklist_free(&tokens);
+        poll_jobs(&jobs, 50);
+        reap_jobs(&jobs, &jobs_idx);
     }
 
 
