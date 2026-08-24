@@ -229,6 +229,37 @@ void print_jobs()
     }
 }
 
+void get_recent_job_idx(size_t *one, size_t *two)
+{
+    *one = 0;
+    *two = 0;
+    for (size_t i = 0; i < jobs.count; i++) {
+        Job job = jobs.items[i];
+        if (job.idx > *one) {
+            *two = *one;
+            *one = job.idx;
+        }
+    }
+}
+
+void print_job(Job job, bool done)
+{
+    size_t highest_idx = 0;
+    size_t second_highest_idx = 0;
+    get_recent_job_idx(&highest_idx, &second_highest_idx);
+    char marker = ' ';
+    if (job.idx == highest_idx)
+        marker = '+';
+    else if (job.idx == second_highest_idx)
+        marker = '-';
+    printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
+    for (size_t j = 0; job.cmd[j]; j++) {
+        printf("%s ", job.cmd[j]);
+    }
+    printf("%s", done ? "\n" : "&\n");
+    fflush(stdout);
+}
+
 void command_echo(TokenList words)
 {
     for (size_t i = 0; i < words.count; i++) {
@@ -329,30 +360,10 @@ void command_complete(TokenList args)
 
 void command_jobs(TokenList cmd)
 {
-    size_t highest_idx = 0;
-    size_t second_highest_idx = 0;
-    // 1 2 3
-    for (size_t i = 0; i < jobs.count; i++) {
-        Job job = jobs.items[i];
-        if (job.idx > highest_idx) {
-            second_highest_idx = highest_idx;
-            highest_idx = job.idx;
-        }
-    }
     for (size_t i = 0; i < jobs.count;) {
         Job job = jobs.items[i];
-        char marker = ' ';
         bool done = waitpid(job.pid, NULL, WNOHANG) != 0;
-        if (job.idx == highest_idx)
-            marker = '+';
-        else if (job.idx == second_highest_idx)
-            marker = '-';
-        printf("[%d]%c  %s                 ", job.idx, marker, done ? "Done" : "Running");
-        for (size_t j = 0; job.cmd[j]; j++) {
-            printf("%s ", job.cmd[j]);
-        }
-        printf("%s", done ? "\n" : "&\n");
-        fflush(stdout);
+        print_job(job, done);
         if (done) {
             da_remove(jobs, i);
             job_free(&job);
@@ -645,35 +656,36 @@ void poll_jobs()
         fds[i].events = POLLIN;
     }
     int ret = poll(fds, jobs.count, 50);
-    if (ret <= 0) return;
-    for (size_t i = 0; i < jobs.count;) {
-        if (~fds[i].revents & POLLIN) {
-            i++;
-            continue;
-        }
+    for (size_t i = 0; i < jobs.count; i++) {
         Job job = jobs.items[i];
-        char buffer[4096];
-        StringBuilder str = {0};
-        const size_t buffer_sz = sizeof(buffer);
-        ssize_t bytes;
-        while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
-            for (ssize_t i = 0; i < bytes; i++) {
-                da_push(str, buffer[i]);
+        if (fds[i].revents & POLLIN) {
+            char buffer[4096];
+            StringBuilder str = {0};
+            const size_t buffer_sz = sizeof(buffer);
+            ssize_t bytes;
+            while ((bytes = read(job.fds[0], buffer, buffer_sz)) > 0) {
+                for (ssize_t i = 0; i < bytes; i++) {
+                    da_push(str, buffer[i]);
+                }
             }
+            close(job.fds[0]);
+            if (str.count) {
+                da_push(str, '\0');
+                if (str.items[str.count - 2] == '\n')
+                    printf("%s", str.items);
+                else
+                    printf("%s\n", str.items);
+                fflush(stdout);
+            }
+            da_free(str);
         }
-        close(job.fds[0]);
-        if (str.count) {
-            da_push(str, '\0');
-            if (str.items[str.count - 2] == '\n')
-                printf("%s", str.items);
-            else
-                printf("%s\n", str.items);
-            fflush(stdout);
+        if (waitpid(job.pid, NULL, WNOHANG) != 0) {
+            print_job(job, true);
+            job_free(&job);
+            da_remove(jobs, i);
+            i--;
+            jobs_idx--;
         }
-        da_free(str);
-        // job_free(&job);
-        // da_remove(jobs, i);
-        // jobs_idx--;
     }
 }
 
