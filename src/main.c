@@ -158,9 +158,7 @@ int redirect_where(TokenList cmd, Token *where, const char* *mode)
 TokenList pipe_where(TokenList cmd)
 {
     Token tok = {0};
-    while ((tok = next_tok(&cmd)).type != TOK_PIPE);
-
-    next_tok(&cmd);
+    while ((tok = next_tok(&cmd)).type != TOK_PIPE && tok.type != TOK_NIL);
 
     return cmd;
 }
@@ -287,11 +285,9 @@ void execute_program(const char *path, TokenList args, TokenList env, int from_f
     if (path == NULL || args.count == 0)
         return;
 
-    size_t args_count = 0;
-    Token arg = TOK_NULL;
+    size_t args_count;
 
-    for (size_t i = 0; i < args.count && args.items[i].type == TOK_WORD; i++)
-        args_count++;
+    for (args_count = 0; args_count < args.count && args.items[args_count].type == TOK_WORD; args_count++);
 
     bool background = args.count > 0 && args.items[args.count - 1].type == TOK_JOB;
     char **arguments = toklist_to_cstrlist(args, args_count);
@@ -364,7 +360,22 @@ bool run_if_program(TokenList tokens)
         FILE *f = fopen(where_to.data, mode);
         if (f) to_fd = fileno(f);
     }
-    execute_program(program, tokens, (TokenList){0}, from_fd, to_fd);
+    TokenList pipe_to = pipe_where(tokens);
+    int fds[2];
+    if (pipe_to.count > 0) {
+        pipe(fds);
+        execute_program(program, tokens, (TokenList){0}, STDOUT_FILENO, fds[1]);
+        close(fds[1]);
+        int saved_stdin = dup(STDIN_FILENO);
+        dup2(fds[0], STDIN_FILENO);
+        close(fds[0]);
+        run_if_program(pipe_to);
+        dup2(saved_stdin, STDIN_FILENO);
+        close(saved_stdin);
+    }
+    else {
+        execute_program(program, tokens, (TokenList){0}, from_fd, to_fd);
+    }
 
     return true;
 }
