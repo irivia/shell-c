@@ -10,6 +10,7 @@
 #include "da.h"
 
 typedef enum {
+    TOK_NIL,
     TOK_WORD,
     TOK_WRITE_OUT,
     TOK_APPEN_OUT,
