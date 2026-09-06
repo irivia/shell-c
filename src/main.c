@@ -361,8 +361,8 @@ bool run_if_program(TokenList tokens)
         if (f) to_fd = fileno(f);
     }
     TokenList pipe_to = pipe_where(tokens);
-    int fds[2];
     if (pipe_to.count > 0) {
+        int fds[2];
         pipe(fds);
         execute_program(program, tokens, (TokenList){0}, STDOUT_FILENO, fds[1]);
         close(fds[1]);
